@@ -4,7 +4,7 @@ Install `010084A0176AA000.dsmod.zip` through Eden Duo's **Add-ons â†’ Install â†
 
 This read-only experimental port uses the first game's fixed recorded-dungeon-map presentation and battle-card layout. It does not write to the game or expose unexplored areas. III's sea maps are not supported; unknown scenes show an unavailable screen rather than a stale dungeon map. Drawing and memo text are unsupported.
 
-III stores its map artwork inside a compressed Unity bundle. Until runtime loading of that bundle is supported, this port uses built-in icon approximations, not game artwork. In battle, III's enemy names are not yet resolved: cards show `ENEMY 1`, etc. Effect identities and durations remain unknown, and the first game's War Cry countdown is not reused.
+Map artwork is read from the installed game's compressed Unity bundle at runtime. Validated icons fall back to built-in approximations if the bundle or texture metadata cannot be read. The icon-to-map-symbol mapping still needs visual validation. In battle, III's enemy names are not yet resolved: cards show `ENEMY 1`, etc. Effect identities and durations remain unknown, and the first game's War Cry countdown is not reused.
 
 In an isolated III session the map position/floor matched the dungeon view; the battle roster contained the displayed ally and two enemies, and the ally's 44 HP / 18 TP matched the screen. HP maxima, enemy HP, formation order, full parties, transitions, icon mappings and Android behavior need further validation. Non-ASCII combatant names render as `?`.
 
