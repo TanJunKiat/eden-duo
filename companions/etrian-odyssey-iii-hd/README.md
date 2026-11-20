@@ -1,5 +1,7 @@
 # Etrian Odyssey III HD experimental companion
 
+Maintainers: see the [three-game implementation and research handoff](../../docs/etrian-companions-maintainer-guide.md).
+
 Install `010084A0176AA000.dsmod.zip` through Eden Duo's **Add-ons → Install → Dual screen mods**. Requires companion runtime 19 and updated main build ID `3D0322EDA242DEC85321974C126F43AC00000000000000000000000000000000`.
 
 This read-only experimental port uses the first game's fixed recorded-dungeon-map presentation and battle-card layout. It does not write to the game or expose unexplored areas. III's sea maps are not supported; unknown scenes show an unavailable screen rather than a stale dungeon map. Drawing and memo text are unsupported.

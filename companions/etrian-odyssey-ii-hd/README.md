@@ -1,5 +1,7 @@
 # Etrian Odyssey II HD experimental companion
 
+Maintainers: see the [three-game implementation and research handoff](../../docs/etrian-companions-maintainer-guide.md).
+
 Install `0100B810176A8000.dsmod.zip` through Eden Duo's **Add-ons → Install → Dual screen mods**. Requires companion runtime 19 and updated main build ID `8883310FF46D85D17C09882B36A8205D00000000000000000000000000000000`.
 
 This read-only experimental port uses the first game's fixed recorded-map presentation and battle-card layout. It does not write to the game or expose unexplored areas. Game map artwork is read from the installed title at runtime, with fallbacks when the validated asset layout is absent. Sea maps, drawing and memo text are unsupported.

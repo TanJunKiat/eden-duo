@@ -1,5 +1,7 @@
 # Etrian Odyssey HD experimental companion
 
+Maintainers: see the [three-game implementation and research handoff](../../docs/etrian-companions-maintainer-guide.md).
+
 This directory contains the experimental read-only map companion and its Android ARM64 package, `01008970176A6000.dsmod.zip`. Install it in Eden Duo via the game's **Add-ons → Install → Dual screen mods**. It requires companion runtime 19 or later and the updated game executable with build ID `4CBA9B7CE88603D196F4C63639586B8F00000000000000000000000000000000`.
 
 The companion reads the current floor's saved map and does not write to the game. It shows coordinate labels, the floor number, a facing arrow, and saved map icons. It attempts to read the player artwork and artwork for all 28 known saved map icon types from the installed game's RomFS at runtime, including streamed Switch textures; unavailable artwork uses built-in approximations. The icon reader checks the expected texture names and layout and fails closed if they differ. The first cut was observed by a player showing floors and walls; the updated visuals, icon meanings, facing, floor changes and reloads still need device validation. Live moving FOEs are not yet displayed (a placed FOE marker uses game artwork when available). Drawing and memo text are not implemented.
