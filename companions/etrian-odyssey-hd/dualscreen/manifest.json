@@ -1,0 +1,20 @@
+{
+  "format": 1,
+  "title_id": "01008970176A6000",
+  "name": "Etrian Odyssey HD experimental map",
+  "min_runtime": 19,
+  "requires_module": true,
+  "poll_hz": 10,
+  "canvas_w": 560,
+  "canvas_h": 480,
+  "background": "#FF082744",
+  "module_outputs": ["map.ready", "map.key", "map.floor"],
+  "pages": [
+    {
+      "id": "main",
+      "widgets": [
+        {"type": "image", "rect": [0, 0, 560, 480], "src_bind": "map.key", "need_bind": "map.ready"}
+      ]
+    }
+  ]
+}
