@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Experimental read-only Etrian Odyssey HD 1.0.3 map companion.
 #include "etrian_map.h"
+#include "etrian_art.h"
 #include "core/mods/dsmod_module_abi.h"
 #include "core/mods/dsmod_module_extensions.h"
 #include <array>
 #include <cstdint>
-#include <cstdio>
 #include <cstring>
 #include <mutex>
 #include <new>
@@ -22,6 +22,11 @@ struct State {
     std::array<int32_t, etrian::cells> icons{};
     int x = -1, y = -1, floor = -1, direction = -1;
     unsigned generation = 0;
+    int zoom = 1;
+    unsigned view_reset = 0;
+    std::array<etrian::IconPixels,42> artwork{};
+    std::array<bool,42> artwork_ok{};
+    bool artwork_loaded = false;
 };
 template<class T> bool read(const EdenDsmodHostApi* h, uint64_t p, T& v) {
     return p && h->is_mapped(h->userdata,p,sizeof(T)) && h->read_memory(h->userdata,p,&v,sizeof(T));
@@ -29,7 +34,7 @@ template<class T> bool read(const EdenDsmodHostApi* h, uint64_t p, T& v) {
 bool ptr(const EdenDsmodHostApi* h, uint64_t address, uint64_t& out) { return read(h,address,out) && out; }
 EdenDsmodBool supports(const char* id) { return id && !std::strcmp(id,Build); }
 void* create(const EdenDsmodHostApi* h,const char*) {
-    if (!h || h->title_id != Title || !h->read_memory || !h->is_mapped || !h->publish_text || !h->publish_i64) return nullptr;
+    if (!h || h->title_id != Title || !h->read_memory || !h->is_mapped || !h->publish_text || !h->publish_i64 || !h->publish_f64) return nullptr;
     return new (std::nothrow) State;
 }
 void destroy(void* p) { delete static_cast<State*>(p); }
@@ -65,16 +70,34 @@ void sample(void* p,const EdenDsmodHostApi* h) {
     const std::string key="module:etrian:map/"+std::to_string(generation);
     h->publish_text(h->userdata,"map.key",key.c_str());
     h->publish_i64(h->userdata,"map.floor",floor);
+    h->publish_f64(h->userdata,"map.zoom",s.zoom);
+    h->publish_f64(h->userdata,"map.cx",s.zoom==1 ? 0.5 : (32.0+x*16+8)/592);
+    h->publish_f64(h->userdata,"map.cy",s.zoom==1 ? 0.5 : (48.0+etrian::screen_y(y)*16+8)/528);
+    h->publish_i64(h->userdata,"map.view_reset",s.view_reset);
     h->publish_i64(h->userdata,"map.ready",1);
 }
 void tick(void*,const EdenDsmodHostApi*) {}
 void configure(void*,const EdenDsmodHostExtensions*) {}
-EdenDsmodBool image(void* p,const EdenDsmodHostApi*,const char* key,void* receiver,EdenDsmodImageSink sink) {
+EdenDsmodBool action(void* p,const char* name,int64_t) {
+    if (!p || !name) return EDEN_DSMOD_FALSE;
+    auto& s=*static_cast<State*>(p);
+    if (!std::strcmp(name,"zoom_in")) { if(s.zoom<4) ++s.zoom; }
+    else if (!std::strcmp(name,"zoom_out")) { if(s.zoom>1) --s.zoom; }
+    else if (!std::strcmp(name,"overview")) s.zoom=1;
+    else return EDEN_DSMOD_FALSE;
+    ++s.view_reset;
+    return EDEN_DSMOD_TRUE;
+}
+EdenDsmodBool image(void* p,const EdenDsmodHostApi* host,const char* key,void* receiver,EdenDsmodImageSink sink) {
     if(!p || !key || !sink) return EDEN_DSMOD_FALSE;
     auto& s=*static_cast<State*>(p);
     std::lock_guard<std::mutex> lock(s.mutex);
     const std::string expected="module:etrian:map/"+std::to_string(s.generation);
     if (!s.generation || key!=expected) return EDEN_DSMOD_FALSE;
+    if (!s.artwork_loaded && host && host->read_romfs) {
+        for (int n=1;n<=41;++n) s.artwork_ok[n]=etrian::load_game_icon(*host,n,s.artwork[n]);
+        for (bool loaded : s.artwork_ok) s.artwork_loaded |= loaded;
+    }
     constexpr int scale=16,left=32,top=48,w=left+etrian::width*scale,h=top+etrian::height*scale;
     std::vector<uint8_t> pixels(w*h*4);
     auto put=[&](int x,int y,uint32_t c) { if(x<0||x>=w||y<0||y>=h)return; auto i=(y*w+x)*4; pixels[i]=c>>16; pixels[i+1]=c>>8; pixels[i+2]=c; pixels[i+3]=c>>24; };
@@ -121,7 +144,16 @@ EdenDsmodBool image(void* p,const EdenDsmodHostApi*,const char* key,void* receiv
         case 18:symbol='F';color=0xffff725d;break; case 19:case 21:symbol='O';break; case 22:symbol='X';break; case 23:symbol='A';break;
         case 25:symbol='^';break; case 26:symbol='>';break; default:if(icon>=0)symbol='?';break;
         }
-        if(icon==2 || icon==3) {
+        const int art=etrian::art_for_map_icon(icon);
+        if(art && s.artwork_ok[art]) {
+            const auto& texture=s.artwork[art];
+            for(int yy=0;yy<16;++yy) for(int xx=0;xx<16;++xx) {
+                const int source=((53-yy*54/16)*54+xx*54/16)*4;
+                const int dest=((oy+yy)*w+ox+xx)*4;
+                const int alpha=texture[source+3];
+                for(int c=0;c<3;++c) pixels[dest+c]=uint8_t((texture[source+c]*alpha+pixels[dest+c]*(255-alpha)+127)/255);
+            }
+        } else if(icon==2 || icon==3) {
             // Stair symbols use opposing stepped diagonals, not the generic arrow markers.
             box(ox+2,oy+2,12,12,0xff273b35);
             for(int n=0;n<4;++n) {
@@ -135,7 +167,16 @@ EdenDsmodBool image(void* p,const EdenDsmodHostApi*,const char* key,void* receiv
     }
     const int py=top+etrian::screen_y(s.y)*scale, px=left+s.x*scale;
     // Draw an outlined arrow; the game direction enum is north/east/south/west (0..3).
-    for(int yy=1;yy<15;++yy) for(int xx=1;xx<15;++xx) {
+    if(s.artwork_ok[19]) {
+        const auto& texture=s.artwork[19];
+        for(int yy=0;yy<16;++yy) for(int xx=0;xx<16;++xx) {
+            int sx=xx,sy=yy;
+            if(s.direction==1){sx=yy;sy=15-xx;} else if(s.direction==2){sx=15-xx;sy=15-yy;} else if(s.direction==3){sx=15-yy;sy=xx;}
+            const int source=((53-sy*54/16)*54+sx*54/16)*4;
+            const int dest=((py+yy)*w+px+xx)*4, alpha=texture[source+3];
+            for(int c=0;c<3;++c) pixels[dest+c]=uint8_t((texture[source+c]*alpha+pixels[dest+c]*(255-alpha)+127)/255);
+        }
+    } else for(int yy=1;yy<15;++yy) for(int xx=1;xx<15;++xx) {
         int dx=xx-8,dy=yy-8,rx=dx,ry=dy;
         if(s.direction==1){rx=dy;ry=-dx;} else if(s.direction==2){rx=-dx;ry=-dy;} else if(s.direction==3){rx=-dy;ry=dx;}
         int arx=rx<0?-rx:rx;
@@ -145,7 +186,7 @@ EdenDsmodBool image(void* p,const EdenDsmodHostApi*,const char* key,void* receiv
     return EDEN_DSMOD_TRUE;
 }
 const EdenDsmodModuleApi api{EDEN_DSMOD_MODULE_ABI_VERSION,sizeof(EdenDsmodModuleApi),0,EDEN_DSMOD_MODULE_ABI_HASH,Title,"Etrian Odyssey HD map",EDEN_DSMOD_CAP_EXTENSIONS,&supports,&create,&destroy,&sample,&tick};
-const EdenDsmodModuleExtensions extensions{EDEN_DSMOD_EXT_VERSION,sizeof(EdenDsmodModuleExtensions),EDEN_DSMOD_EXT_HASH,&configure,nullptr,&image};
+const EdenDsmodModuleExtensions extensions{EDEN_DSMOD_EXT_VERSION,sizeof(EdenDsmodModuleExtensions),EDEN_DSMOD_EXT_HASH,&configure,&action,&image};
 }
 extern "C" __attribute__((visibility("default"))) const EdenDsmodModuleApi* eden_dsmod_get_module(uint32_t v,uint64_t h){return v==EDEN_DSMOD_MODULE_ABI_VERSION&&h==EDEN_DSMOD_MODULE_ABI_HASH?&api:nullptr;}
 extern "C" __attribute__((visibility("default"))) const EdenDsmodModuleExtensions* eden_dsmod_get_extensions(uint32_t v,uint64_t h){return v==EDEN_DSMOD_EXT_VERSION&&h==EDEN_DSMOD_EXT_HASH?&extensions:nullptr;}

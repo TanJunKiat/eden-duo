@@ -6,14 +6,22 @@
   "requires_module": true,
   "poll_hz": 10,
   "canvas_w": 592,
-  "canvas_h": 528,
+  "canvas_h": 600,
   "background": "#FF082744",
-  "module_outputs": ["map.ready", "map.key", "map.floor"],
+  "module_outputs": ["map.ready", "map.key", "map.floor", "map.zoom", "map.cx", "map.cy", "map.view_reset"],
+  "actions": {
+    "zoom.in": {"kind": "module", "action": "zoom_in"},
+    "zoom.out": {"kind": "module", "action": "zoom_out"},
+    "zoom.overview": {"kind": "module", "action": "overview"}
+  },
   "pages": [
     {
       "id": "main",
       "widgets": [
-        {"type": "image", "rect": [0, 0, 592, 528], "src_bind": "map.key", "need_bind": "map.ready"}
+        {"type": "image", "id": "map", "rect": [0, 0, 592, 528], "src_bind": "map.key", "need_bind": "map.ready", "pan_zoom": true, "min_zoom": 1, "max_zoom": 4, "view_idle_ms": 1500, "view_zoom_bind": "map.zoom", "view_cx_bind": "map.cx", "view_cy_bind": "map.cy", "view_reset_bind": "map.view_reset"},
+        {"type": "button", "rect": [8, 536, 120, 56], "text": "-", "text_scale": 3, "on_tap": "zoom.out"},
+        {"type": "button", "rect": [136, 536, 320, 56], "text": "FULL MAP", "text_scale": 2, "on_tap": "zoom.overview"},
+        {"type": "button", "rect": [464, 536, 120, 56], "text": "+", "text_scale": 3, "on_tap": "zoom.in"}
       ]
     }
   ]

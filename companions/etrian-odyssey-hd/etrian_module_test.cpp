@@ -1,15 +1,23 @@
 #include "01008970176A6000.cpp"
 #include <cassert>
 #include <map>
-struct Fake { std::map<uint64_t,uint8_t> mem; std::map<std::string,int64_t> ints; std::string key; std::vector<uint8_t> pixels; };
+struct Fake { std::map<uint64_t,uint8_t> mem; std::map<std::string,int64_t> ints; std::map<std::string,double> floats; std::string key; std::vector<uint8_t> pixels; };
 template<class T> void store(Fake& f,uint64_t a,T v) { auto p=reinterpret_cast<const uint8_t*>(&v); for(size_t i=0;i<sizeof(v);++i)f.mem[a+i]=p[i]; }
 EdenDsmodBool mapped(void* p,uint64_t a,uint64_t n) { auto& m=static_cast<Fake*>(p)->mem; for(uint64_t i=0;i<n;++i)if(!m.count(a+i))return false; return true; }
 EdenDsmodBool memory(void* p,uint64_t a,void* out,size_t n) { if(!mapped(p,a,n))return false; auto& m=static_cast<Fake*>(p)->mem; for(size_t i=0;i<n;++i)static_cast<uint8_t*>(out)[i]=m[a+i]; return true; }
 void integer(void* p,const char* name,int64_t v) { static_cast<Fake*>(p)->ints[name]=v; }
+void number(void* p,const char* name,double v) { static_cast<Fake*>(p)->floats[name]=v; }
 void text(void* p,const char*,const char* v) { static_cast<Fake*>(p)->key=v; }
+size_t asset(void*,const char*,uint64_t off,void* out,size_t n) {
+ if(off!=0xf6178 || n!=11768)return 0;
+ auto* b=static_cast<uint8_t*>(out); std::memset(b,0,n);
+ b[0]=10; std::memcpy(b+4,"icon_map01",10); b[24]=54; b[28]=54; b[40]=4; b[100]=0x90; b[101]=0x2d;
+ for(size_t i=104;i<n;i+=4) { b[i]=255; b[i+3]=255; }
+ return n;
+}
 void sink(void* p,uint32_t w,uint32_t h,const uint8_t* pixels,size_t n) { assert(w==592&&h==528); static_cast<Fake*>(p)->pixels.assign(pixels,pixels+n); }
 int main() {
- Fake f; EdenDsmodHostApi host{}; host.title_id=Title; host.main_base=0x100000; host.userdata=&f; host.is_mapped=mapped; host.read_memory=memory; host.publish_i64=integer; host.publish_text=text;
+ Fake f; EdenDsmodHostApi host{}; host.title_id=Title; host.main_base=0x100000; host.userdata=&f; host.is_mapped=mapped; host.read_memory=memory; host.publish_i64=integer; host.publish_f64=number; host.publish_text=text;
  store(f,host.main_base+MethodSlot,uint64_t(0x200000)); store(f,0x200018,uint64_t(0x300000)); store(f,0x3000c0,uint64_t(0x400000)); store(f,0x400000,uint64_t(0x300000)); store(f,0x3000b8,uint64_t(0x500000)); store(f,0x500000,uint64_t(0x600000));
  store(f,0x6000d0,int32_t(1)); store(f,0x600068,int32_t(6)); store(f,0x60006c,int32_t(10)); store(f,0x600078,int32_t(0)); store(f,0x6000d8,uint64_t(0x700000)); store(f,0x700018,int32_t(30));
  store(f,0x700040,uint64_t(0x800000)); store(f,0x700028,uint64_t(0xa00000)); store(f,0x800018,int32_t(2100)); store(f,0x800010,uint64_t(0x900000)); store(f,0x900018,int32_t(2100)); store(f,0xa00018,int32_t(1050));
@@ -18,6 +26,21 @@ int main() {
  auto pixel=[&](int x,int y,int c){return f.pixels[(y*592+x)*4+c];};
  assert(pixel(32+6*16+7,48+20*16+7,0)>180); // marked stair
  assert(pixel(32+6*16+8,48+19*16+4,1)>180); // north-facing player
+ host.read_romfs=asset; assert(image(state,&host,f.key.c_str(),&f,sink));
+ assert(pixel(32+6*16+7,48+20*16+7,0)==255 && pixel(32+6*16+7,48+20*16+7,1)==0); // game art replaces fallback
+ assert(f.floats["map.zoom"]==1.0);
+ assert(action(state,"zoom_in",0)); sample(state,&host);
+ assert(f.floats["map.zoom"]==2.0);
+ assert(f.floats["map.cx"]==(32.0+6*16+8)/592);
+ assert(f.floats["map.cy"]==(48.0+19*16+8)/528);
+ store(f,0x600068,int32_t(7)); sample(state,&host);
+ assert(f.floats["map.cx"]==(32.0+7*16+8)/592); // follows movement
+ assert(action(state,"zoom_in",0)); assert(action(state,"zoom_in",0)); assert(action(state,"zoom_in",0));
+ sample(state,&host); assert(f.floats["map.zoom"]==4.0);
+ assert(action(state,"zoom_out",0)); sample(state,&host); assert(f.floats["map.zoom"]==3.0);
+ assert(!action(state,"unknown",0));
+ assert(action(state,"overview",0)); sample(state,&host); assert(f.floats["map.zoom"]==1.0);
+ assert(f.floats["map.cx"]==0.5 && f.floats["map.cy"]==0.5);
  auto old_key=f.key; store(f,0x600078,int32_t(1)); sample(state,&host); assert(f.key!=old_key); // turning redraws
  store(f,0x6000d0,int32_t(0)); sample(state,&host); assert(f.ints["map.ready"]==0);
  destroy(state);
