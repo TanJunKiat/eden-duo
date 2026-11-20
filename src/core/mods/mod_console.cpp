@@ -76,8 +76,8 @@ void ModRuntime::DriveCmdImpl() {
     //   findi <val>           heap search (aligned) for an int32 value, log matches
     //   findf <val>           heap search for a float value
     //   watch <hexaddr>       log this addr's float+int every tick until "watch 0"
-    static const char* const path = Common::DSMod::DevEnvironment("EDEN_DSMOD_CMD");
-    if (path == nullptr) {
+    static const char* const command_path = Common::DSMod::DevEnvironment("EDEN_DSMOD_CMD");
+    if (command_path == nullptr) {
         return;
     }
     auto& memory = OwnerMemory();
@@ -290,17 +290,17 @@ void ModRuntime::DriveCmdImpl() {
         }
     }
     std::error_code ec;
-    if (!std::filesystem::exists(path, ec)) {
+    if (!std::filesystem::exists(command_path, ec)) {
         return;
     }
-    std::ifstream f(path);
+    std::ifstream f(command_path);
     std::string op;
     f >> op;
     if (op.empty()) {
         return;
     }
     {
-        std::ofstream trunc(path, std::ios::trunc);
+        std::ofstream trunc(command_path, std::ios::trunc);
     }
     if (op == "mapdump") {
         // Write every cached area image whose key starts with the given prefix ("prefog:s010_cave",

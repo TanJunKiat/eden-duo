@@ -33,6 +33,10 @@ int main() {
  assert(pixel(40,25,1)>150 && pixel(40,25,0)<30); // green coordinate tabs
  assert(pixel(5,55,1)>150 && pixel(5,55,0)<30); // green row tabs
  auto old_key=f.key; store(f,0x600078,int32_t(1)); sample(state,&host); assert(f.key!=old_key); // turning redraws
+ // A battle scene without a readable roster must replace the map with a loading image.
+ store(f,host.main_base+0x5392908,uint64_t(0xb00000)); store(f,0xb00058,uint64_t(0xb10000)); store(f,0xb100b8,uint64_t(0xb20000)); store(f,0xb20000,uint64_t(0xb30000)); store(f,0xb3001c,int32_t(2));
+ old_key=f.key; sample(state,&host); assert(f.ints["map.ready"]==1 && f.key!=old_key); assert(image(state,&host,f.key.c_str(),&f,sink));
+ store(f,0xb3001c,int32_t(4)); sample(state,&host); assert(f.ints["map.ready"]==1 && f.key!=old_key);
  store(f,0x6000d0,int32_t(0)); sample(state,&host); assert(f.ints["map.ready"]==0);
  destroy(state);
 }

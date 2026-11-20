@@ -6,6 +6,8 @@ The companion reads the current floor's saved map and does not write to the game
 
 The complete recorded map stays fixed in view, with game-inspired coordinate tabs and floor indicator. There are no zoom, pan or follow controls.
 
+During a detected battle the experimental dashboard replaces the map with current allies and enemies, candidate current/max HP, ally TP when available, and the observed War Cry attack-up countdown. Other effects and durations are not yet supported. Battle detection, enemy HP, combatant identity and countdown handling need Android testing, particularly for full parties, bosses, summons, different languages and battle transitions. Unreadable or incomplete battle data shows an unavailable screen rather than stale values. Non-ASCII characters in names currently appear as `?`.
+
 ## Tests
 
 From the repository root, with a C++20 compiler:
@@ -17,6 +19,8 @@ clang++ -std=c++20 -I src companions/etrian-odyssey-hd/etrian_art_test.cpp -o /t
 /tmp/etrian-art-test
 clang++ -std=c++20 -I src companions/etrian-odyssey-hd/etrian_module_test.cpp -o /tmp/etrian-module-test
 /tmp/etrian-module-test
+clang++ -std=c++20 companions/etrian-odyssey-hd/etrian_battle_test.cpp -o /tmp/etrian-battle-test
+/tmp/etrian-battle-test
 ```
 
 The module test uses synthetic guest memory, not the game or an Android device.
@@ -30,7 +34,7 @@ Use Android NDK r28c and the public [Eden Duo Companions](https://github.com/iga
   -I src companions/etrian-odyssey-hd/01008970176A6000.cpp -o /tmp/01008970176A6000.so
 "$NDK_HOST/bin/llvm-strip" --strip-all /tmp/01008970176A6000.so
 python3 "$COMPANIONS/tools/build_dualscreen_package.py" \
-  --package companions/etrian-odyssey-hd --output /tmp/etrian-dist --version 0.6.0 \
+  --package companions/etrian-odyssey-hd --output /tmp/etrian-dist --version 0.7.0 \
   --module android-arm64-v8a=/tmp/01008970176A6000.so \
   --build-id 4CBA9B7CE88603D196F4C63639586B8F00000000000000000000000000000000 \
   --min-runtime 19

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Experimental read-only Etrian Odyssey HD 1.0.3 map companion.
 #include "etrian_map.h"
+#include "etrian_battle.h"
 #include "etrian_art.h"
 #include "core/mods/dsmod_module_abi.h"
 #include "core/mods/dsmod_module_extensions.h"
@@ -22,6 +23,8 @@ struct State {
     std::array<int32_t, etrian::cells> icons{};
     int x = -1, y = -1, floor = -1, direction = -1;
     unsigned generation = 0;
+    etrian::BattleMode mode = etrian::BattleMode::map;
+    etrian::BattleSnapshot battle;
     std::array<etrian::IconPixels,42> artwork{};
     std::array<bool,42> artwork_ok{};
     bool artwork_loaded = false;
@@ -39,6 +42,25 @@ void destroy(void* p) { delete static_cast<State*>(p); }
 void sample(void* p,const EdenDsmodHostApi* h) {
     if (!p || !h) return;
     auto& s=*static_cast<State*>(p);
+    etrian::BattleSnapshot battle;
+    const auto reader=[&](uint64_t address,void* data,size_t size) {
+        return address && h->is_mapped(h->userdata,address,size) && h->read_memory(h->userdata,address,data,size);
+    };
+    auto mode=etrian::read_battle(reader,h->main_base,battle);
+    {
+        std::lock_guard<std::mutex> lock(s.mutex);
+        if (mode==etrian::BattleMode::unknown && s.mode!=etrian::BattleMode::map) mode=etrian::BattleMode::loading;
+        if (mode==etrian::BattleMode::unknown) mode=etrian::BattleMode::map;
+        if (mode!=etrian::BattleMode::map) {
+            if (s.mode!=mode || !(s.battle==battle)) ++s.generation;
+            s.mode=mode; s.battle=std::move(battle);
+            const std::string key="module:etrian:map/"+std::to_string(s.generation);
+            h->publish_text(h->userdata,"map.key",key.c_str());
+            h->publish_i64(h->userdata,"map.ready",1);
+            return;
+        }
+        if (s.mode!=etrian::BattleMode::map) { s.mode=etrian::BattleMode::map; s.battle={}; ++s.generation; }
+    }
     uint64_t a=0, manager=0, floors=0, list=0, array=0, icon_array=0;
     int32_t floor=0,x=0,y=0,direction=-1,count=0,icon_count=0;
     bool ok=ptr(h,h->main_base+MethodSlot,a) && ptr(h,a+0x18,a) && ptr(h,a+0xc0,a) &&
@@ -73,12 +95,65 @@ void sample(void* p,const EdenDsmodHostApi* h) {
 void tick(void*,const EdenDsmodHostApi*) {}
 void configure(void*,const EdenDsmodHostExtensions*) {}
 EdenDsmodBool action(void*,const char*,int64_t) { return EDEN_DSMOD_FALSE; }
+EdenDsmodBool battle_image(const State& state,void* receiver,EdenDsmodImageSink sink) {
+    constexpr int w=592,h=528;
+    std::vector<uint8_t> pixels(w*h*4);
+    auto box=[&](int x,int y,int bw,int bh,uint32_t color) {
+        for(int yy=y;yy<y+bh && yy<h;++yy) for(int xx=x;xx<x+bw && xx<w;++xx) {
+            if(xx<0 || yy<0) continue;
+            auto i=(yy*w+xx)*4; pixels[i]=color>>16; pixels[i+1]=color>>8; pixels[i+2]=color; pixels[i+3]=color>>24;
+        }
+    };
+    auto text=[&](int x,int y,const std::string& value,uint32_t color) {
+        static constexpr const char* letters[]={
+            "010101111101101","110101110101110","011100100100011","110101101101110","111100110100111","111100110100100",
+            "011100101101011","101101111101101","111010010010111","001001001101010","101101110101101","100100100100111",
+            "101111111101101","101111111111101","010101101101010","110101110100100","010101101111011","110101110101101",
+            "011100010001110","111010010010010","101101101101111","101101101101010","101101111111101","101101010101101",
+            "101101010010010","111001010100111"};
+        static constexpr const char* numbers[]={"111101101101111","010110010010111","110001010100111","110001010001110","101101111001001","111100110001110","011100110101010","111001010010010","010101010101010","010101011001110"};
+        for(char raw:value) {
+            char c=raw>='a'&&raw<='z'?char(raw-'a'+'A'):raw;
+            const char* bits=nullptr;
+            if(c>='A'&&c<='Z') bits=letters[c-'A']; else if(c>='0'&&c<='9') bits=numbers[c-'0'];
+            else if(c=='/') bits="001001010100100"; else if(c=='+') bits="000010111010000"; else if(c=='-') bits="000000111000000";
+            else if(c=='?') bits="110001010000010"; else if(c=='.') bits="000000000000010"; else if(c==':') bits="000010000010000";
+            if(bits) for(int yy=0;yy<5;++yy) for(int xx=0;xx<3;++xx) if(bits[yy*3+xx]=='1') box(x+xx*2,y+yy*2,2,2,color);
+            x+=8;
+        }
+    };
+    box(0,0,w,h,0xff082744); box(0,0,w,32,0xff003153);
+    text(16,10,"BATTLE DASHBOARD",0xff9dfcf0);
+    if(state.mode!=etrian::BattleMode::battle) {
+        text(16,58,"BATTLE DATA UNAVAILABLE",0xfff4d78b);
+    } else {
+        int y=40;
+        auto group=[&](const char* title,const std::vector<etrian::Combatant>& list,bool ally) {
+            box(8,y,w-16,19,0xff075a80); text(14,y+4,title,0xff9dfcf0); y+=21;
+            for(size_t i=0;i<list.size();++i) {
+                const auto& c=list[i];
+                box(8,y,w-16,23,i%2?0xff103b58:0xff0a3450);
+                auto name=c.name; if(name.size()>14) name=name.substr(0,11)+"...";
+                text(14,y+6,name,0xffe1f8f5);
+                text(150,y+6,"HP "+std::to_string(c.hp)+"/"+std::to_string(c.max_hp),0xfff5dc83);
+                if(ally) text(270,y+6,c.tp<0?"TP ?":"TP "+std::to_string(c.tp)+"/"+std::to_string(c.max_tp),0xff7ce3fa);
+                if(c.war_cry>0) text(400,y+6,"ATK+ "+std::to_string(c.war_cry),0xff80edaa);
+                y+=25;
+            }
+        };
+        group("ALLIES",state.battle.allies,true); group("ENEMIES",state.battle.enemies,false);
+        if(y+20<h) text(14,y+6,"OTHER EFFECTS UNAVAILABLE",0xff93b2c2);
+    }
+    sink(receiver,w,h,pixels.data(),pixels.size());
+    return EDEN_DSMOD_TRUE;
+}
 EdenDsmodBool image(void* p,const EdenDsmodHostApi* host,const char* key,void* receiver,EdenDsmodImageSink sink) {
     if(!p || !key || !sink) return EDEN_DSMOD_FALSE;
     auto& s=*static_cast<State*>(p);
     std::lock_guard<std::mutex> lock(s.mutex);
     const std::string expected="module:etrian:map/"+std::to_string(s.generation);
     if (!s.generation || key!=expected) return EDEN_DSMOD_FALSE;
+    if (s.mode!=etrian::BattleMode::map) return battle_image(s,receiver,sink);
     if (!s.artwork_loaded && host && host->read_romfs) {
         for (int n=1;n<=41;++n) s.artwork_ok[n]=etrian::load_game_icon(*host,n,s.artwork[n]);
         for (bool loaded : s.artwork_ok) s.artwork_loaded |= loaded;
