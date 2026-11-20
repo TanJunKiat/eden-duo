@@ -122,26 +122,32 @@ EdenDsmodBool battle_image(const State& state,void* receiver,EdenDsmodImageSink 
             x+=8;
         }
     };
-    box(0,0,w,h,0xff082744); box(0,0,w,32,0xff003153);
+    box(0,0,w,h,0xff102b29); box(0,0,w,32,0xff132c65);
     text(16,10,"BATTLE DASHBOARD",0xff9dfcf0);
     if(state.mode!=etrian::BattleMode::battle) {
         text(16,58,"BATTLE DATA UNAVAILABLE",0xfff4d78b);
     } else {
-        auto group=[&](int x,const char* title,const std::vector<etrian::Combatant>& list,bool ally) {
-            text(x+6,40,title,0xff9dfcf0);
+        auto group=[&](int top,const char* title,const std::vector<etrian::Combatant>& list,bool ally) {
+            text(16,top-18,title,0xffd5ecff);
             for(size_t i=0;i<list.size() && i<8;++i) {
-                const auto& c=list[i]; const int y=60+int(i)*56;
-                box(x,y,280,52,0xff164b6b); box(x,y,280,17,0xff075a80);
-                auto name=c.name; if(name.size()>11) name=name.substr(0,8)+"...";
-                text(x+6,y+4,name,0xffe1f8f5);
-                text(x+105,y+4,"HP "+std::to_string(c.hp)+"/"+std::to_string(c.max_hp),0xfff5dc83);
-                if(ally) text(x+6,y+21,c.tp<0?"TP ?":"TP "+std::to_string(c.tp)+"/"+std::to_string(c.max_tp),0xff7ce3fa);
-                if(c.war_cry>0) text(x+6,y+36,"WAR CRY "+std::to_string(c.war_cry)+" T",0xff80edaa);
-                else text(x+6,y+36,"EFFECTS UNKNOWN",0xff93b2c2);
+                const int row=int(i/3), col=int(i%3);
+                const int remaining=int(list.size())-row*3, columns=remaining<3?remaining:3;
+                const int x=(w-(columns*184+(columns-1)*10))/2+col*194, y=top+row*68;
+                const auto& c=list[i];
+                box(x,y,184,64,0xff001937); box(x+2,y+2,180,13,0xff003a70);
+                box(x+2,y+17,180,45,0xff006ab5);
+                box(x+20,y+17,2,45,0xff002c58);
+                box(x+2,y+31,180,2,0xff002c58); box(x+2,y+45,180,2,0xff002c58);
+                auto name=c.name; if(name.size()>21) name=name.substr(0,18)+"...";
+                text(x+5,y+3,name,0xffe3f4ff);
+                text(x+25,y+19,"HP "+std::to_string(c.hp)+"/"+std::to_string(c.max_hp),0xfff8f5cb);
+                if(ally) text(x+25,y+33,c.tp<0?"TP ?":"TP "+std::to_string(c.tp)+"/"+std::to_string(c.max_tp),0xffe3f4ff);
+                if(c.war_cry>0) text(x+25,y+48,"WAR CRY "+std::to_string(c.war_cry)+" T",0xfff9f6b2);
+                else text(x+25,y+48,"EFFECTS UNKNOWN",0xffd3e4ed);
             }
         };
-        group(8,"ALLIES",state.battle.allies,true); group(304,"ENEMIES",state.battle.enemies,false);
-        text(14,514,"OTHER EFFECTS UNAVAILABLE",0xff93b2c2);
+        group(58,"ENEMIES",state.battle.enemies,false); group(304,"ALLIES",state.battle.allies,true);
+        text(14,514,"OTHER EFFECTS UNAVAILABLE",0xffc3dce6);
     }
     sink(receiver,w,h,pixels.data(),pixels.size());
     return EDEN_DSMOD_TRUE;

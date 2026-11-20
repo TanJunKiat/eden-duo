@@ -6,7 +6,7 @@ The companion reads the current floor's saved map and does not write to the game
 
 The complete recorded map stays fixed in view, with game-inspired coordinate tabs and floor indicator. There are no zoom, pan or follow controls.
 
-During a detected battle the experimental dashboard replaces the map with two columns of combatant cards, showing current allies and enemies, candidate current/max HP, ally TP when available, and the observed War Cry countdown. Other effects and durations are not yet supported and are explicitly labelled unknown; multiple stacked skills and localized skill-name lookup are still being researched. Battle detection, enemy HP, combatant identity and countdown handling need Android testing, particularly for full parties, bosses, summons, different languages and battle transitions. Unreadable or incomplete battle data shows an unavailable screen rather than stale values. Non-ASCII characters in names currently appear as `?`.
+During a detected battle the experimental dashboard replaces the map with blue combatant cards, with enemies above allies. Cards show candidate current/max HP, ally TP when available, and the observed War Cry countdown. Cards preserve the order of occupied roster-array entries, but whether this matches the game's visual formation order has not been verified, particularly for gaps, defeated combatants and summons. Other effects and durations are not yet supported and are explicitly labelled unknown; multiple stacked skills and localized skill-name lookup are still being researched. Battle detection, enemy HP, combatant identity and countdown handling need Android testing, particularly for full parties, bosses, summons, different languages and battle transitions. Unreadable or incomplete battle data shows an unavailable screen rather than stale values. Non-ASCII characters in names currently appear as `?`.
 
 ## Tests
 
@@ -34,7 +34,7 @@ Use Android NDK r28c and the public [Eden Duo Companions](https://github.com/iga
   -I src companions/etrian-odyssey-hd/01008970176A6000.cpp -o /tmp/01008970176A6000.so
 "$NDK_HOST/bin/llvm-strip" --strip-all /tmp/01008970176A6000.so
 python3 "$COMPANIONS/tools/build_dualscreen_package.py" \
-  --package companions/etrian-odyssey-hd --output /tmp/etrian-dist --version 0.7.1 \
+  --package companions/etrian-odyssey-hd --output /tmp/etrian-dist --version 0.7.2 \
   --module android-arm64-v8a=/tmp/01008970176A6000.so \
   --build-id 4CBA9B7CE88603D196F4C63639586B8F00000000000000000000000000000000 \
   --min-runtime 19

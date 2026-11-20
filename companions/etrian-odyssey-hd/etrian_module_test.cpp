@@ -18,13 +18,24 @@ size_t asset(void*,const char*,uint64_t off,void* out,size_t n) {
 void sink(void* p,uint32_t w,uint32_t h,const uint8_t* pixels,size_t n) { assert(w==592&&h==528); static_cast<Fake*>(p)->pixels.assign(pixels,pixels+n); }
 int main() {
  Fake f;
- // All 16 bounded roster slots must fit in separate ally and enemy columns.
+ // Eight enemies above eight allies, with three columns and a centered last row.
  State cards; cards.mode=etrian::BattleMode::battle;
  for(int i=0;i<8;++i) { etrian::Combatant c; c.name="TEST"; c.hp=10; c.max_hp=20; c.war_cry=3; cards.battle.allies.push_back(c); cards.battle.enemies.push_back(c); }
  assert(battle_image(cards,&f,sink));
  auto cardpixel=[&](int x,int y,int channel){return f.pixels[(y*592+x)*4+channel];};
- assert(cardpixel(12,70,1)>70 && cardpixel(308,70,1)>70);
- assert(cardpixel(12,462,1)>70 && cardpixel(308,462,1)>70);
+ for(int y : {82,328}) for(int x : {180,374,568}) assert(cardpixel(x,y,1)==106);
+ for(int y : {218,464}) for(int x : {277,471}) assert(cardpixel(x,y,1)==106);
+ // A two-member row is centered and keeps vector order from left to right.
+ cards.battle.enemies.resize(2); cards.battle.enemies[0].name="A"; cards.battle.enemies[1].name="B";
+ assert(battle_image(cards,&f,sink)); auto before=f.pixels;
+ std::swap(cards.battle.enemies[0],cards.battle.enemies[1]); assert(battle_image(cards,&f,sink));
+ bool different=false;
+ for(int y=61;y<71;++y) for(int x=0;x<6;++x) for(int channel=0;channel<3;++channel) {
+  auto left=(y*592+112+x)*4+channel, right=(y*592+306+x)*4+channel;
+  different |= before[left]!=f.pixels[left];
+  assert(before[left]==f.pixels[right] && before[right]==f.pixels[left]);
+ }
+ assert(different);
  EdenDsmodHostApi host{}; host.title_id=Title; host.main_base=0x100000; host.userdata=&f; host.is_mapped=mapped; host.read_memory=memory; host.publish_i64=integer; host.publish_f64=number; host.publish_text=text;
  store(f,host.main_base+MethodSlot,uint64_t(0x200000)); store(f,0x200018,uint64_t(0x300000)); store(f,0x3000c0,uint64_t(0x400000)); store(f,0x400000,uint64_t(0x300000)); store(f,0x3000b8,uint64_t(0x500000)); store(f,0x500000,uint64_t(0x600000));
  store(f,0x6000d0,int32_t(1)); store(f,0x600068,int32_t(6)); store(f,0x60006c,int32_t(10)); store(f,0x600078,int32_t(0)); store(f,0x6000d8,uint64_t(0x700000)); store(f,0x700018,int32_t(30));

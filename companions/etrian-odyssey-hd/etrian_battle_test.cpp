@@ -37,6 +37,16 @@ int main() {
     assert(etrian::read_battle(m,base,b)==etrian::BattleMode::battle);
     assert(b.allies.size()==1 && b.enemies.size()==1 && b.enemies[0].hp==12 && b.enemies[0].max_hp==19);
     assert(b.allies[0].name=="RAT" && b.allies[0].tp==7);
+    // Preserve occupied array order, even with a gap and repeated combatants.
+    m.put(0x395014,uint16_t('C')); // second record is CAT
+    m.put(0x360018,int32_t(4)); m.put(0x370018,int32_t(3));
+    ptr(0x360020,0x390000); ptr(0x360028,0); ptr(0x360030,0x380000); ptr(0x360038,0x390000);
+    ptr(0x370020,0x380000); ptr(0x370028,0); ptr(0x370030,0x390000);
+    assert(etrian::read_battle(m,base,b)==etrian::BattleMode::battle);
+    assert(b.allies.size()==3 && b.allies[0].name=="CAT" && b.allies[1].name=="RAT" && b.allies[2].name=="CAT");
+    assert(b.enemies.size()==2 && b.enemies[0].name=="RAT" && b.enemies[1].name=="CAT");
+    m.put(0x360018,int32_t(1)); m.put(0x370018,int32_t(1));
+    ptr(0x360020,0x380000); ptr(0x370020,0x390000);
     ptr(0x381028,0x3a0000); m.put(0x3a0018,int32_t(1)); ptr(0x3a0020,0x3b0000);
     m.put(0x3b0010,int32_t(9)); m.put(0x3b0018,int32_t(14)); m.put(0x3b001c,float(3));
     assert(etrian::read_battle(m,base,b)==etrian::BattleMode::battle && b.allies[0].war_cry==3);
