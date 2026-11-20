@@ -127,22 +127,21 @@ EdenDsmodBool battle_image(const State& state,void* receiver,EdenDsmodImageSink 
     if(state.mode!=etrian::BattleMode::battle) {
         text(16,58,"BATTLE DATA UNAVAILABLE",0xfff4d78b);
     } else {
-        int y=40;
-        auto group=[&](const char* title,const std::vector<etrian::Combatant>& list,bool ally) {
-            box(8,y,w-16,19,0xff075a80); text(14,y+4,title,0xff9dfcf0); y+=21;
-            for(size_t i=0;i<list.size();++i) {
-                const auto& c=list[i];
-                box(8,y,w-16,23,i%2?0xff103b58:0xff0a3450);
-                auto name=c.name; if(name.size()>14) name=name.substr(0,11)+"...";
-                text(14,y+6,name,0xffe1f8f5);
-                text(150,y+6,"HP "+std::to_string(c.hp)+"/"+std::to_string(c.max_hp),0xfff5dc83);
-                if(ally) text(270,y+6,c.tp<0?"TP ?":"TP "+std::to_string(c.tp)+"/"+std::to_string(c.max_tp),0xff7ce3fa);
-                if(c.war_cry>0) text(400,y+6,"ATK+ "+std::to_string(c.war_cry),0xff80edaa);
-                y+=25;
+        auto group=[&](int x,const char* title,const std::vector<etrian::Combatant>& list,bool ally) {
+            text(x+6,40,title,0xff9dfcf0);
+            for(size_t i=0;i<list.size() && i<8;++i) {
+                const auto& c=list[i]; const int y=60+int(i)*56;
+                box(x,y,280,52,0xff164b6b); box(x,y,280,17,0xff075a80);
+                auto name=c.name; if(name.size()>11) name=name.substr(0,8)+"...";
+                text(x+6,y+4,name,0xffe1f8f5);
+                text(x+105,y+4,"HP "+std::to_string(c.hp)+"/"+std::to_string(c.max_hp),0xfff5dc83);
+                if(ally) text(x+6,y+21,c.tp<0?"TP ?":"TP "+std::to_string(c.tp)+"/"+std::to_string(c.max_tp),0xff7ce3fa);
+                if(c.war_cry>0) text(x+6,y+36,"WAR CRY "+std::to_string(c.war_cry)+" T",0xff80edaa);
+                else text(x+6,y+36,"EFFECTS UNKNOWN",0xff93b2c2);
             }
         };
-        group("ALLIES",state.battle.allies,true); group("ENEMIES",state.battle.enemies,false);
-        if(y+20<h) text(14,y+6,"OTHER EFFECTS UNAVAILABLE",0xff93b2c2);
+        group(8,"ALLIES",state.battle.allies,true); group(304,"ENEMIES",state.battle.enemies,false);
+        text(14,514,"OTHER EFFECTS UNAVAILABLE",0xff93b2c2);
     }
     sink(receiver,w,h,pixels.data(),pixels.size());
     return EDEN_DSMOD_TRUE;
