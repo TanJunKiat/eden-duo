@@ -1,8 +1,8 @@
 # Etrian Odyssey HD experimental companion
 
-This directory preserves the first read-only map prototype and its Android ARM64 package, `01008970176A6000.dsmod.zip`. Install it in Eden Duo via the game's **Add-ons → Install → Dual screen mods**. It requires companion runtime 19 or later and the updated game executable with build ID `4CBA9B7CE88603D196F4C63639586B8F00000000000000000000000000000000`.
+This directory contains the experimental read-only map companion and its Android ARM64 package, `01008970176A6000.dsmod.zip`. Install it in Eden Duo via the game's **Add-ons → Install → Dual screen mods**. It requires companion runtime 19 or later and the updated game executable with build ID `4CBA9B7CE88603D196F4C63639586B8F00000000000000000000000000000000`.
 
-The companion reads the current floor's saved map and does not write to the game. The first cut has been observed by a player showing floors and walls. Icons are generic yellow squares; their types, floor changes, reloads, and orientation across floors need further validation. Drawing and memo text are not implemented.
+The companion reads the current floor's saved map and does not write to the game. It shows coordinate labels, the floor number, a facing arrow, and simplified symbols for saved map icons. These are original approximations, not game artwork. The first cut was observed by a player showing floors and walls; the updated visuals, icon meanings, facing, floor changes and reloads still need device validation. Live moving FOEs are not yet displayed (a placed FOE marker is shown as F). Drawing and memo text are not implemented.
 
 ## Tests
 
@@ -26,7 +26,7 @@ Use Android NDK r28c and the public [Eden Duo Companions](https://github.com/iga
   -I src companions/etrian-odyssey-hd/01008970176A6000.cpp -o /tmp/01008970176A6000.so
 "$NDK_HOST/bin/llvm-strip" --strip-all /tmp/01008970176A6000.so
 python3 "$COMPANIONS/tools/build_dualscreen_package.py" \
-  --package companions/etrian-odyssey-hd --output /tmp/etrian-dist --version 0.1.0 \
+  --package companions/etrian-odyssey-hd --output /tmp/etrian-dist --version 0.2.0 \
   --module android-arm64-v8a=/tmp/01008970176A6000.so \
   --build-id 4CBA9B7CE88603D196F4C63639586B8F00000000000000000000000000000000 \
   --min-runtime 19
