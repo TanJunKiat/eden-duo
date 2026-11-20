@@ -1,0 +1,26 @@
+{
+  "format": 1,
+  "title_id": "010062E01FE0C000",
+  "name": "Time Stranger — Active Digimon",
+  "min_runtime": 19,
+  "requires_module": true,
+  "poll_hz": 5,
+  "canvas_w": 592,
+  "canvas_h": 528,
+  "background": "#FF101823",
+  "module_outputs": ["party.0", "party.1", "party.2"],
+  "pages": [{
+    "id": "main",
+    "widgets": [
+      {"type": "label", "rect": [24, 24, 540, 44], "text": "ACTIVE DIGIMON", "text_scale": 4, "color": "#FFFFCC55"},
+      {"type": "label", "rect": [24, 76, 540, 28], "text": "TIME STRANGER  /  v1.2.2", "text_scale": 2, "color": "#FF9BAABC"},
+      {"type": "label", "rect": [24, 132, 540, 24], "text": "BATTLE SLOT 1", "text_scale": 2, "color": "#FFFFCC55"},
+      {"type": "label", "rect": [24, 168, 540, 48], "bind_text": "party.0", "text_scale": 4, "color": "#FFF0F5FF"},
+      {"type": "label", "rect": [24, 240, 540, 24], "text": "BATTLE SLOT 2", "text_scale": 2, "color": "#FFFFCC55"},
+      {"type": "label", "rect": [24, 276, 540, 48], "bind_text": "party.1", "text_scale": 4, "color": "#FFF0F5FF"},
+      {"type": "label", "rect": [24, 348, 540, 24], "text": "BATTLE SLOT 3", "text_scale": 2, "color": "#FFFFCC55"},
+      {"type": "label", "rect": [24, 384, 540, 48], "bind_text": "party.2", "text_scale": 4, "color": "#FFF0F5FF"},
+      {"type": "label", "rect": [24, 480, 540, 24], "text": "READ ONLY  /  EXPERIMENTAL", "text_scale": 2, "color": "#FF9BAABC"}
+    ]
+  }]
+}
