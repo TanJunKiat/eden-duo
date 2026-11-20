@@ -4,7 +4,7 @@ This directory contains the experimental read-only map companion and its Android
 
 The companion reads the current floor's saved map and does not write to the game. It shows coordinate labels, the floor number, a facing arrow, and saved map icons. It attempts to read the player artwork and artwork for all 28 known saved map icon types from the installed game's RomFS at runtime, including streamed Switch textures; unavailable artwork uses built-in approximations. The icon reader checks the expected texture names and layout and fails closed if they differ. The first cut was observed by a player showing floors and walls; the updated visuals, icon meanings, facing, floor changes and reloads still need device validation. Live moving FOEs are not yet displayed (a placed FOE marker uses game artwork when available). Drawing and memo text are not implemented.
 
-Use **+** and **−** to zoom between 1× and 4× around the player; **FULL MAP** returns to the overview. Drag or pinch the map to inspect another area; after a short idle it returns to the player. Coordinate labels are part of the image and may leave the view when zoomed in. Zoom is not saved between sessions.
+The complete recorded map stays fixed in view, with game-inspired coordinate tabs and floor indicator. There are no zoom, pan or follow controls.
 
 ## Tests
 
@@ -30,7 +30,7 @@ Use Android NDK r28c and the public [Eden Duo Companions](https://github.com/iga
   -I src companions/etrian-odyssey-hd/01008970176A6000.cpp -o /tmp/01008970176A6000.so
 "$NDK_HOST/bin/llvm-strip" --strip-all /tmp/01008970176A6000.so
 python3 "$COMPANIONS/tools/build_dualscreen_package.py" \
-  --package companions/etrian-odyssey-hd --output /tmp/etrian-dist --version 0.5.0 \
+  --package companions/etrian-odyssey-hd --output /tmp/etrian-dist --version 0.6.0 \
   --module android-arm64-v8a=/tmp/01008970176A6000.so \
   --build-id 4CBA9B7CE88603D196F4C63639586B8F00000000000000000000000000000000 \
   --min-runtime 19

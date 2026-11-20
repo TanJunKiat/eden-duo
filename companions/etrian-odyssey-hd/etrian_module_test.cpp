@@ -28,19 +28,10 @@ int main() {
  assert(pixel(32+6*16+8,48+19*16+4,1)>180); // north-facing player
  host.read_romfs=asset; assert(image(state,&host,f.key.c_str(),&f,sink));
  assert(pixel(32+6*16+7,48+20*16+7,0)==255 && pixel(32+6*16+7,48+20*16+7,1)==0); // game art replaces fallback
- assert(f.floats["map.zoom"]==1.0);
- assert(action(state,"zoom_in",0)); sample(state,&host);
- assert(f.floats["map.zoom"]==2.0);
- assert(f.floats["map.cx"]==(32.0+6*16+8)/592);
- assert(f.floats["map.cy"]==(48.0+19*16+8)/528);
- store(f,0x600068,int32_t(7)); sample(state,&host);
- assert(f.floats["map.cx"]==(32.0+7*16+8)/592); // follows movement
- assert(action(state,"zoom_in",0)); assert(action(state,"zoom_in",0)); assert(action(state,"zoom_in",0));
- sample(state,&host); assert(f.floats["map.zoom"]==4.0);
- assert(action(state,"zoom_out",0)); sample(state,&host); assert(f.floats["map.zoom"]==3.0);
- assert(!action(state,"unknown",0));
- assert(action(state,"overview",0)); sample(state,&host); assert(f.floats["map.zoom"]==1.0);
- assert(f.floats["map.cx"]==0.5 && f.floats["map.cy"]==0.5);
+ assert(!action(state,"zoom_in",0) && !action(state,"zoom_out",0) && !action(state,"overview",0));
+ assert(!f.floats.count("map.zoom") && !f.floats.count("map.cx"));
+ assert(pixel(40,25,1)>150 && pixel(40,25,0)<30); // green coordinate tabs
+ assert(pixel(5,55,1)>150 && pixel(5,55,0)<30); // green row tabs
  auto old_key=f.key; store(f,0x600078,int32_t(1)); sample(state,&host); assert(f.key!=old_key); // turning redraws
  store(f,0x6000d0,int32_t(0)); sample(state,&host); assert(f.ints["map.ready"]==0);
  destroy(state);

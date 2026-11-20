@@ -22,8 +22,6 @@ struct State {
     std::array<int32_t, etrian::cells> icons{};
     int x = -1, y = -1, floor = -1, direction = -1;
     unsigned generation = 0;
-    int zoom = 1;
-    unsigned view_reset = 0;
     std::array<etrian::IconPixels,42> artwork{};
     std::array<bool,42> artwork_ok{};
     bool artwork_loaded = false;
@@ -34,7 +32,7 @@ template<class T> bool read(const EdenDsmodHostApi* h, uint64_t p, T& v) {
 bool ptr(const EdenDsmodHostApi* h, uint64_t address, uint64_t& out) { return read(h,address,out) && out; }
 EdenDsmodBool supports(const char* id) { return id && !std::strcmp(id,Build); }
 void* create(const EdenDsmodHostApi* h,const char*) {
-    if (!h || h->title_id != Title || !h->read_memory || !h->is_mapped || !h->publish_text || !h->publish_i64 || !h->publish_f64) return nullptr;
+    if (!h || h->title_id != Title || !h->read_memory || !h->is_mapped || !h->publish_text || !h->publish_i64) return nullptr;
     return new (std::nothrow) State;
 }
 void destroy(void* p) { delete static_cast<State*>(p); }
@@ -70,24 +68,11 @@ void sample(void* p,const EdenDsmodHostApi* h) {
     const std::string key="module:etrian:map/"+std::to_string(generation);
     h->publish_text(h->userdata,"map.key",key.c_str());
     h->publish_i64(h->userdata,"map.floor",floor);
-    h->publish_f64(h->userdata,"map.zoom",s.zoom);
-    h->publish_f64(h->userdata,"map.cx",s.zoom==1 ? 0.5 : (32.0+x*16+8)/592);
-    h->publish_f64(h->userdata,"map.cy",s.zoom==1 ? 0.5 : (48.0+etrian::screen_y(y)*16+8)/528);
-    h->publish_i64(h->userdata,"map.view_reset",s.view_reset);
     h->publish_i64(h->userdata,"map.ready",1);
 }
 void tick(void*,const EdenDsmodHostApi*) {}
 void configure(void*,const EdenDsmodHostExtensions*) {}
-EdenDsmodBool action(void* p,const char* name,int64_t) {
-    if (!p || !name) return EDEN_DSMOD_FALSE;
-    auto& s=*static_cast<State*>(p);
-    if (!std::strcmp(name,"zoom_in")) { if(s.zoom<4) ++s.zoom; }
-    else if (!std::strcmp(name,"zoom_out")) { if(s.zoom>1) --s.zoom; }
-    else if (!std::strcmp(name,"overview")) s.zoom=1;
-    else return EDEN_DSMOD_FALSE;
-    ++s.view_reset;
-    return EDEN_DSMOD_TRUE;
-}
+EdenDsmodBool action(void*,const char*,int64_t) { return EDEN_DSMOD_FALSE; }
 EdenDsmodBool image(void* p,const EdenDsmodHostApi* host,const char* key,void* receiver,EdenDsmodImageSink sink) {
     if(!p || !key || !sink) return EDEN_DSMOD_FALSE;
     auto& s=*static_cast<State*>(p);
@@ -122,11 +107,19 @@ EdenDsmodBool image(void* p,const EdenDsmodHostApi* host,const char* key,void* r
         }
         if(bits) for(int yy=0;yy<5;++yy) for(int xx=0;xx<3;++xx) if(bits[yy*3+xx]=='1') box(x+xx*z,y+yy*z,z,z,color);
     };
-    box(0,0,w,h,0xff173c49);
+    box(0,0,w,h,0xff003153);
+    box(0,0,w,20,0xff00233c);
     box(left,top,etrian::width*scale,etrian::height*scale,0xff082744);
-    glyph(10,5,'B',0xffffe8b2); if(s.floor>=10) glyph(20,5,char('0'+s.floor/10),0xffffe8b2); glyph(s.floor>=10?28:20,5,char('0'+s.floor%10),0xffffe8b2); glyph(s.floor>=10?36:28,5,'F',0xffffe8b2);
-    for(int col=0;col<7;++col) glyph(left+col*5*scale+37,27,char('1'+col),0xffe5e2b3);
-    for(int row=0;row<6;++row) glyph(13,top+row*5*scale+35,char('A'+row),0xffe5e2b3);
+    box(4,2,50,16,0xff075a80);
+    glyph(10,5,'B',0xff9dfcf0); if(s.floor>=10) glyph(20,5,char('0'+s.floor/10),0xff9dfcf0); glyph(s.floor>=10?28:20,5,char('0'+s.floor%10),0xff9dfcf0); glyph(s.floor>=10?36:28,5,'F',0xff9dfcf0);
+    for(int col=0;col<7;++col) {
+        box(left+col*5*scale+1,23,5*scale-2,23,0xff00c995);
+        glyph(left+col*5*scale+35,27,char('1'+col),0xff003153,3);
+    }
+    for(int row=0;row<6;++row) {
+        box(4,top+row*5*scale+1,25,5*scale-2,0xff00c995);
+        glyph(12,top+row*5*scale+32,char('A'+row),0xff003153,3);
+    }
     for(int y=0;y<etrian::height;++y) for(int x=0;x<etrian::width;++x) {
         int i=etrian::index(x,y), sy=etrian::screen_y(y), ox=left+x*scale, oy=top+sy*scale; uint32_t f=s.tiles[i], c=etrian::floor_color(f);
         for(int py=0;py<scale;++py) for(int px=0;px<scale;++px) put(ox+px,oy+py,(px==0||py==0)?0xff16465c:c);
