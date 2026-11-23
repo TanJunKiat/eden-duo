@@ -10,7 +10,21 @@ Version **0.1.4 — Abyss Glass** adds localized enemy names to the battle panel
 - **Dungeon:** the fixed recorded-exploration map retains the full grid, drawn walls, icon fallbacks, and player heading.
 - **Battle:** enemies appear on the stage above the party HUD. Cards follow the readable roster order, not verified in-game positions, and keep readable KO members visible. There are no Front/Back labels. The panel reports effects as unavailable; once verified, effects will use skill names, not stat abbreviations.
 
-The companion does not write to the game or expose unexplored areas. III's sea maps are not supported; unknown scenes show an unavailable screen rather than a stale dungeon map. Drawing and memo text are unsupported.
+The companion does not write to the game. The v0.1.4 ZIP shows recorded exploration only. III's sea maps are not supported; unknown scenes show an unavailable screen rather than a stale dungeon map. Drawing and memo text are unsupported.
+
+## B1F exploration trial (v0.1.6 source)
+
+The separate trial build starts on the full recorded map with hints off. Tap **Hints: Off** to show a faint full-floor outline on B1F. Recorded tiles, walls, icons and heading take priority; the hints include no reference treasure, shortcut, or event markers. Tap **Floor Guide** to see monsters from the standard B1F encounter tables, using names from the installed game's active language. **Back to Map** restores the previous hint setting. Town and battle dismiss the guide.
+
+Tap a monster card for localized item drops and base chances per defeated monster, before modifiers. Conditional items are listed, but their requirements and chances are marked unverified. **Back to List** returns to the roster. The guide does not show special encounter variants or monster encounter odds. B1F is the only floor with verified hint and guide data. The map reference must match the live floor identity, dimensions, and stair coordinates; missing or mismatched data falls back to the recorded map and an unavailable guide. Map geometry and monster data are read from the installed game, not bundled. The checked-in v0.1.4 ZIP is unchanged.
+
+## Quest Tracker trial (v0.1.7)
+
+From the dungeon map, tap **Quests**. Main missions come first, then active side quests you can work on from your current floor. Tap a row for the objective, locations and sources, required items, and turn-in point where known. Only active and report-ready entries appear; completed and unaccepted quests stay hidden. **Back to List** and **Back to Map** return without changing the map or hints.
+
+The installed HD game supplies journal state, localized names and fallback objective text. The companion adds English guide hints—even where the journal is vague—based on the [EO III HD Steam guide](https://steamcommunity.com/sharedfiles/filedetails/?id=2994339871) and [Final Weapon's HD quest guide](https://finalweapon.net/2023/06/05/etrian-odyssey-3-quests-list/), matched to the installed game's entries. Incomplete or conflicting information falls back to journal text or omits the unverified detail. **In bag** is carried inventory, not quest credit. The tracker shows the game's active/report-ready flags; it does not estimate kill, mapping, event or gathering counters. It does not open in town, battle or at sea.
+
+The B1F main mission and touch navigation were checked in an isolated macOS session. Side-quest flags and inventory transitions have synthetic coverage; late-game hints were guide-checked, not individually replayed. Physical Android testing is still outstanding.
 
 Map artwork is read from the installed game's compressed Unity bundle at runtime. Validated icons fall back to built-in approximations if the bundle or texture metadata cannot be read. The icon-to-map-symbol mapping still needs visual validation. Enemy names come from the game's active text table (English, German, French, Italian, or Spanish). If the lookup is unavailable and the unit has no readable name of its own, the card falls back to `ENEMY <slot>`. Effect identities and durations remain unknown, and the first game's War Cry countdown is not reused.
 

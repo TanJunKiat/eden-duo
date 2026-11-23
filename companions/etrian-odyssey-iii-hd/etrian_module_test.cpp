@@ -63,9 +63,99 @@ int main() {
  assert(!f.floats.count("map.zoom") && !f.floats.count("map.cx"));
  assert(rgb(68+34*13+7,107+29*13+7)==0x0b1429); // last column and row remain visible
  assert(rgb(68,107)==0x314762); // sector grid origin
+ // DungeonCtrl holds the loaded HD map north-first, unlike the saved tile array.
+ store(f,host.main_base+0x61a6040,uint64_t(0xd00000)); store(f,0xd00018,uint64_t(0xd10000));
+ store(f,0xd100c0,uint64_t(0xd20000)); store(f,0xd20000,uint64_t(0xd30000));
+ store(f,0xd300b8,uint64_t(0xd40000)); store(f,0xd40000,uint64_t(0xd50000));
+ store(f,0xd50078,uint64_t(0xd60000)); store(f,0xd60010,uint64_t(0xd70000));
+ store(f,0xd70010,int32_t(0)); store(f,0xd70014,uint32_t(0x10010));
+ store(f,0xd70018,int32_t(35)); store(f,0xd7001c,int32_t(30));
+ store(f,0xd70140,uint64_t(0xd80000)); store(f,0xd80010,uint64_t(0xd90000));
+ store(f,0xd80018,int32_t(1050)); store(f,0xd90018,uint64_t(1050));
+ for(int i=0;i<1050;++i) for(int j=0;j<12;++j)
+  store(f,0xd90020+i*12+j,uint8_t(j==0?(i==671 || i==672 || i==706?1:14):0));
+ for(const auto i : {10+25*35,23+14*35,33+19*35}) store(f,0xd90020+i*12,uint8_t(18));
+ sample(state,&host); assert(f.ints["map.exploring"]==1 && f.ints["map.hints_available"]==1);
+ const auto normal_key=f.key; assert(image(state,&host,f.key.c_str(),&f,sink)); const auto normal_pixels=f.pixels;
+ assert(action(state,"hints",0)); sample(state,&host); assert(f.key!=normal_key);
+ assert(!image(state,&host,normal_key.c_str(),&f,sink)); assert(image(state,&host,f.key.c_str(),&f,sink));
+ assert(rgb(68+7*13+7,107+19*13+7)==0x192b40); // unrecorded hint, northeast of the saved stair
+ assert(rgb(68+6*13+12,107+20*13+3)==0x85bce3); // live walls still win
+ assert(action(state,"guide",0)); sample(state,&host);
+ assert(f.ints["map.guide"]==1 && f.ints["map.hints_available"]==0);
+ assert(image(state,&host,f.key.c_str(),&f,sink) && f.pixels!=normal_pixels);
+ assert(!action(state,"hints",0));
+ assert(!action(state,"monster",0)); // no published roster
+ auto& guide_state=*static_cast<State*>(state);
+ guide_state.monsters={{37,"Test Monster"}};
+ assert(!action(state,"monster",-1) && !action(state,"monster",1));
+ const auto roster_key=f.key;
+ assert(action(state,"monster",0) && guide_state.selected_monster==37);
+ assert(!image(state,&host,roster_key.c_str(),&f,sink));
+ assert(!action(state,"map",0) && action(state,"roster",0) && !guide_state.selected_monster);
+ assert(action(state,"map",0)); sample(state,&host);
+ assert(image(state,&host,f.key.c_str(),&f,sink));
+ // A stale level identity must suppress the overlay instead of misaligning it.
+ store(f,0xd70014,uint32_t(0x20010)); sample(state,&host);
+ assert(image(state,&host,f.key.c_str(),&f,sink)); assert(rgb(68+7*13+7,107+19*13+7)==0x0b1429);
  auto old_key=f.key; store(f,0x600080,int32_t(1)); sample(state,&host); assert(f.key!=old_key); // turning redraws
+ // A missing journal is not an empty journal; opening it must not shrink the map.
+ assert(action(state,"quests",0)); sample(state,&host);
+ assert(f.ints["quest.open"]==1 && f.ints["quest.count"]==0);
+ assert(image(state,&host,f.key.c_str(),&f,sink));
+ const auto unavailable=f.pixels;
+ assert(!action(state,"quest",0));
+ // Installed-build-shaped definition and event flag arrays.
+ uint64_t address=host.main_base;
+ for (const auto off : {0x61a60f0,0x18,0xc0,0,0xb8,0}) {
+  const auto next=0xe00000+(address==host.main_base?0:address-0xe00000+0x1000);
+  store(f,address+off,next); address=next;
+ }
+ for (int type=0;type<2;++type) {
+  const uint64_t table=0xe10000+type*0x1000, records=table+0x100;
+  store(f,address+0xc0+type*8,table); store(f,table+0x10,records);
+  const int n=type==0?52:13;
+  store(f,records+0x18,uint64_t(n));
+  for(int i=0;i<n;++i) for(int j=0;j<8;++j)
+   store(f,records+0x20+16*i+2*j,uint16_t(j>=3 && j<=5?64+type*256+3*i+j-3:0));
+ }
+ store(f,host.main_base+0x639a810,uint64_t(0xc00000)); store(f,0xc00000,uint64_t(0xc10000));
+ store(f,0xc100b8,uint64_t(0xc20000)); store(f,0xc20000,uint64_t(0xc30000));
+ store(f,0xc30010,uint64_t(0xc40000)); store(f,0xc40048,uint64_t(0xef0000));
+ store(f,0xef0018,uint64_t(2048));
+ for(int i=0;i<2048;++i) store(f,0xef0020+i,uint8_t(0));
+ sample(state,&host); assert(f.ints["quest.count"]==0);
+ assert(image(state,&host,f.key.c_str(),&f,sink) && f.pixels!=unavailable);
+ // Mission 0 accepted; quest 1 ready to report even when its acceptance bit is off.
+ store(f,0xef0020+40,uint8_t(1)); store(f,0xef0020+8,uint8_t(16));
+ sample(state,&host); assert(f.ints["quest.count"]==2);
+ auto& qs=*static_cast<State*>(state);
+ assert(qs.journal.entries[0].key==etrian::QuestKey(true,0));
+ assert(qs.journal.entries[1].status==etrian::QuestStatus::report);
+ assert(!qs.journal.entries[1].items[0].in_bag); // no inventory is not zero items
+ // Carry slots, not report flags, drive the independently labeled bag total.
+ store(f,0xc40020,uint64_t(0xc50000)); store(f,0xc50058,uint64_t(0xee0000));
+ store(f,0xee0018,uint64_t(60));
+ for(int i=0;i<60;++i) {
+  const uint64_t slot=0xee1000+0x40*i;
+  store(f,0xee0020+8*i,slot); store(f,slot+0x10,int16_t(i<2?928:0));
+ }
+ store(f,0xef0020+8,uint8_t(8)); sample(state,&host);
+ assert(qs.journal.entries[1].status==etrian::QuestStatus::active);
+ assert(qs.journal.entries[1].items[0].in_bag==2 && qs.journal.entries[1].items[1].in_bag==0);
+ assert(!action(state,"quest",1)); // the newly changed rows have not been drawn
+ assert(image(state,&host,f.key.c_str(),&f,sink));
+ assert(!action(state,"quest",-1) && !action(state,"quest",2));
+ assert(action(state,"quest",1)); sample(state,&host); assert(f.ints["quest.detail"]==1);
+ // Completion takes priority over report; a stale selection never opens a different quest.
+ store(f,0xef0020+8,uint8_t(48)); sample(state,&host);
+ assert(f.ints["quest.detail"]==0 && f.ints["quest.count"]==1);
+ assert(image(state,&host,f.key.c_str(),&f,sink));
+ assert(action(state,"quest",0)); sample(state,&host);
+ store(f,0xef0018,uint64_t(65535)); sample(state,&host);
+ assert(f.ints["quest.detail"]==0 && f.ints["quest.count"]==0);
+ const auto map_key=f.key; // Leaving exploration also dismisses Quests.
  // Entering town replaces the map. The same stats reuse the image; a rest updates it.
- const auto map_key=f.key;
  store(f,0xb30044,int32_t(3));
  store(f,host.main_base+0x639a810,uint64_t(0xc00000)); store(f,0xc00000,uint64_t(0xc10000));
  store(f,0xc100b8,uint64_t(0xc20000)); store(f,0xc20000,uint64_t(0xc30000));
@@ -76,6 +166,8 @@ int main() {
  store(f,0xc80010,int32_t(1)); store(f,0xc80014,uint16_t('A'));
  sample(state,&host); const auto town_key=f.key;
  assert(f.ints["map.ready"]==1 && town_key!=map_key);
+ assert(f.ints["map.exploring"]==0 && !action(state,"guide",0) && !action(state,"hints",0));
+ assert(f.ints["quest.open"]==0 && !action(state,"quests",0) && !action(state,"quest",0));
  assert(!image(state,&host,map_key.c_str(),&f,sink));
  assert(image(state,&host,town_key.c_str(),&f,sink)); const auto town_pixels=f.pixels;
  sample(state,&host); assert(f.key==town_key);
@@ -91,10 +183,12 @@ int main() {
  assert(image(state,&host,f.key.c_str(),&f,sink) && f.pixels!=town_unavailable);
  store(f,0xb30044,int32_t(4)); sample(state,&host);
  assert(f.ints["map.ready"]==1 && image(state,&host,f.key.c_str(),&f,sink));
- // A battle scene without a readable roster must replace the map with a loading image.
+ // A battle scene without a readable roster must replace the guide with a loading image.
+ assert(action(state,"guide",0)); sample(state,&host); assert(f.ints["map.guide"]==1);
  store(f,0xb30044,int32_t(5));
  old_key=f.key; sample(state,&host); assert(f.ints["map.ready"]==1 && f.key!=old_key); assert(image(state,&host,f.key.c_str(),&f,sink));
- store(f,0xb30044,int32_t(4)); sample(state,&host); assert(f.ints["map.ready"]==1 && f.key!=old_key);
+ store(f,0xb30044,int32_t(4)); sample(state,&host);
+ assert(f.ints["map.ready"]==1 && f.ints["map.guide"]==0 && f.key!=old_key);
  store(f,0x6000dc,int32_t(0)); sample(state,&host); assert(f.ints["map.ready"]==0);
  destroy(state);
 }

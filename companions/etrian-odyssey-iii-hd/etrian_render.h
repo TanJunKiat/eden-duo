@@ -2,8 +2,9 @@
 #pragma once
 #include "etrian_art.h"
 #include "etrian_battle.h"
+#include "etrian_exploration.h"
 #include "etrian_font_data.h"
-#include "etrian_map.h"
+#include "etrian_quests.h"
 
 #include <algorithm>
 #include <array>
@@ -248,10 +249,142 @@ inline void fallback_icon(Canvas& c,int x,int y,int icon) {
         c.center(x+6,y+10,std::string_view(&marker,1),10,color);
     }
 }
+inline void exploration_tab(Canvas& c,int x,int w,std::string_view label,bool active) {
+    c.frame(x,47,w,31,5,active?0x234050:deep);
+    c.center(x+w/2,68,label,12,active?accent:muted);
+}
+inline std::string quest_floors(uint32_t mask) {
+    std::string text;
+    for(int floor=1;floor<=30;++floor) if(mask&quest_floor(floor)) {
+        if(!text.empty()) text+=" / ";
+        text+="B"+std::to_string(floor)+"F";
+    }
+    return text;
+}
+inline void quest_header(Canvas& c,int floor,std::string_view button) {
+    header(c,"02  /  DUNGEON","Quests","");
+    badge(c,422,15,126,"FLOOR  B"+std::to_string(floor)+"F");
+    exploration_tab(c,445,103,button,false);
+}
+inline void quest_list(Canvas& c,int floor,const QuestJournal& journal,size_t page) {
+    quest_header(c,floor,"Back to Map");
+    if(!journal.source) { message(c,"Quest data unavailable","Open the in-game journal if you need to check now."); return; }
+    if(journal.entries.empty()) { message(c,"No active quests","Accepted side quests and main missions appear here."); return; }
+    c.text(44,107,"ACTIVE JOURNAL",12,accent);
+    const auto first=page*quest_page_size;
+    for(size_t i=first;i<std::min(first+quest_page_size,journal.entries.size());++i) {
+        const auto& q=journal.entries[i];
+        const auto hint=quest_hint(q.key);
+        const bool here=q.status==QuestStatus::active && (hint.floors&quest_floor(floor));
+        const int y=116+66*int(i-first);
+        c.frame(44,y,504,59,7,card,here?0x406c74:border);
+        c.text(58,y+16,q.key.mission?"MAIN MISSION":"SIDE QUEST",10,here?hp_color:muted);
+        c.fit(58,y+39,q.name,18,310,ink);
+        const auto floors=quest_floors(hint.floors);
+        c.right(532,y+18,q.status==QuestStatus::report?"Ready to report":here?"On this floor":"In progress",12,here?hp_color:accent);
+        if(!floors.empty()) c.right(532,y+38,floors,11,muted);
+        const auto summary=q.status==QuestStatus::report?hint.turn_in:hint.action;
+        if(!summary.empty()) c.fit(58,y+53,summary,11,463,muted);
+    }
+    if(page) { c.frame(44,463,110,31,5,deep); c.center(99,484,"Previous",12,accent); }
+    if(first+quest_page_size<journal.entries.size()) { c.frame(438,463,110,31,5,deep); c.center(493,484,"Next",12,accent); }
+    c.center(296,484,std::to_string(page+1)+" / "+std::to_string((journal.entries.size()+quest_page_size-1)/quest_page_size),12,muted);
+    footer(c,"Tap a quest for actions, locations and items.","");
+}
+inline void quest_wrap(Canvas& c,int x,int y,std::string_view text,int max_lines) {
+    constexpr int width=464, size=16;
+    while(!text.empty() && max_lines-->0) {
+        if(max_lines==0 || Canvas::measure(text,size)<=width) { c.fit(x,y,text,size,width,ink); return; }
+        size_t end=0, space=0;
+        while(end<text.size() && Canvas::measure(text.substr(0,end+1),size)<=width) {
+            if(text[end]==' ') space=end;
+            ++end;
+        }
+        if(space) end=space;
+        c.text(x,y,text.substr(0,end),size,ink);
+        text.remove_prefix(end);
+        while(!text.empty() && text.front()==' ') text.remove_prefix(1);
+        y+=22;
+    }
+}
+inline void quest_details(Canvas& c,int floor,const QuestEntry& q) {
+    quest_header(c,floor,"Back to List");
+    const auto hint=quest_hint(q.key);
+    c.frame(44,95,504,401,8,deep);
+    c.text(62,119,q.key.mission?"MAIN MISSION":"SIDE QUEST",11,accent);
+    c.fit(62,149,q.name,24,464,ink);
+    auto floors=quest_floors(hint.floors);
+    if(floors.empty()) floors=hint.action.empty()?"Location not verified":"No dungeon floor listed";
+    c.text(62,177,floors,14,muted);
+    c.right(530,177,q.status==QuestStatus::report?"Ready to report":"In progress",14,hp_color);
+    c.text(62,213,hint.action.empty()?"JOURNAL OBJECTIVE":"WHAT TO DO",11,accent);
+    const auto objective=hint.action.empty()?std::string_view(q.description):hint.action;
+    quest_wrap(c,62,238,objective.empty()?"Objective unavailable":objective,q.items.empty()?6:3);
+    if(!q.items.empty()) {
+        c.text(62,311,"REQUIRED ITEMS",11,accent);
+        for(size_t i=0;i<q.items.size();++i) {
+            const auto& item=q.items[i];
+            const int y=321+32*int(i);
+            c.frame(62,y,468,29,5,card);
+            c.fit(72,y+20,item.name,15,270,ink);
+            c.right(519,y+20,(item.in_bag?std::to_string(*item.in_bag)+" / ":"Bag unavailable / ")+
+                    std::to_string(item.required)+(item.in_bag?" in bag":" required"),13,muted);
+        }
+        c.text(62,438,"Bag counts are not quest credit.",13,muted);
+    }
+    c.text(62,474,"REPORT TO",11,accent);
+    c.fit(153,474,hint.turn_in.empty()?"Check the in-game journal":hint.turn_in,15,370,ink);
+    footer(c,"Live journal status","Objective counters not verified");
+}
+inline void floor_guide(Canvas& c,int floor,const std::vector<FloorMonster>& monsters) {
+    header(c,"02  /  DUNGEON","Floor Guide","");
+    badge(c,422,15,126,"FLOOR  B"+std::to_string(floor)+"F");
+    exploration_tab(c,445,103,"Back to Map",false);
+    c.frame(44,100,504,377,7,deep);
+    c.text(62,136,"Standard random encounters",22,accent);
+    if(monsters.empty()) {
+        c.text(62,171,floor==1?"Encounter data unavailable":"No guide coverage on this floor",16,ink);
+    } else {
+        for(size_t i=0;i<monsters.size();++i) {
+            const int x=62+248*(i%2),y=169+44*(i/2);
+            c.frame(x,y,220,34,5,card);
+            c.fit(x+10,y+23,monsters[i].name,16,181,ink);
+            c.text(x+199,y+23,">",14,accent);
+        }
+    }
+    if(!monsters.empty()) c.text(62,442,"Tap a monster to see its drops.",14,muted);
+    c.text(62,463,"Special encounter variants are not listed.",14,muted);
+}
+inline void monster_details(Canvas& c,int floor,const FloorMonster& monster,const DropList& drops) {
+    header(c,"02  /  DUNGEON","Floor Guide","");
+    badge(c,422,15,126,"FLOOR  B"+std::to_string(floor)+"F");
+    exploration_tab(c,445,103,"Back to List",false);
+    c.frame(44,100,504,377,7,deep);
+    c.fit(62,144,monster.name,26,464,ink);
+    c.text(62,173,"ITEM DROPS",13,accent);
+    if(!drops || drops->empty()) {
+        c.text(62,219,drops?"No item drops":"Drop data unavailable",17,muted);
+        return;
+    }
+    for(size_t i=0;i<drops->size();++i) {
+        const auto& d=(*drops)[i];
+        const int y=193+73*int(i);
+        c.frame(62,y,468,62,5,card);
+        c.fit(76,y+26,d.name,19,427,ink);
+        const std::string note=d.conditional?"Conditional drop - requirement and chance unverified":
+            d.base_chance?"Base chance: "+std::to_string(*d.base_chance)+"%":"Chance unverified";
+        c.fit(76,y+48,note,14,427,d.conditional?muted:accent);
+    }
+    c.text(62,449,"Base chances are per defeated monster, before modifiers.",13,muted);
+}
 inline void map(Canvas& c,const std::array<uint32_t,cells>& tiles,const std::array<int32_t,cells>& icons,
                 const std::array<IconPixels,42>& artwork,const std::array<bool,42>& ok,
-                int px,int py,int floor,int direction) {
-    header(c,"02  /  DUNGEON","Labyrinth","FLOOR  B"+std::to_string(floor)+"F");
+                int px,int py,int floor,int direction,const FloorReference* ref=nullptr,bool hints=false) {
+    header(c,"02  /  DUNGEON","Labyrinth","");
+    badge(c,422,15,126,"FLOOR  B"+std::to_string(floor)+"F");
+    exploration_tab(c,445,103,"Floor Guide",false);
+    exploration_tab(c,219,104,"Quests",false);
+    if(ref && ref->ready) exploration_tab(c,332,104,hints?"Hints: On":"Hints: Off",hints);
     c.frame(44,87,504,433,7,deep);
     for(int col=0;col<7;++col)
         c.center(map_left+col*5*map_scale+32,103,std::to_string(col+1),10,muted);
@@ -262,9 +395,17 @@ inline void map(Canvas& c,const std::array<uint32_t,cells>& tiles,const std::arr
     for(int y=0;y<etrian::height;++y) for(int x=0;x<etrian::width;++x) {
         const int i=index(x,y),sy=screen_y(y),ox=map_left+x*map_scale,oy=map_top+sy*map_scale;
         const auto flags=tiles[i];
-        c.box(ox,oy,map_scale,map_scale,tile_fill(flags));
+        const bool hinted=hints && ref && !(flags&8) && icons[i]<0 && ref->open(x,sy);
+        c.box(ox,oy,map_scale,map_scale,hinted?0x192b40:tile_fill(flags));
         c.box(ox,oy,1,map_scale,x%5==0?0x314762:0x233351);
         c.box(ox,oy,map_scale,1,sy%5==0?0x314762:0x233351);
+        if(hinted) {
+            constexpr uint32_t outline=0x40576b;
+            if(!ref->open(x-1,sy) && (x==0 || !has_right_wall(tiles[index(x-1,y)]))) c.box(ox,oy,1,map_scale,outline);
+            if(!ref->open(x+1,sy)) c.box(ox+map_scale-1,oy,1,map_scale,outline);
+            if(!ref->open(x,sy-1) && (y==height-1 || !has_lower_wall(tiles[index(x,y+1)]))) c.box(ox,oy,map_scale,1,outline);
+            if(!ref->open(x,sy+1)) c.box(ox,oy+map_scale-1,map_scale,1,outline);
+        }
         const int icon=icons[i], art=art_for_map_icon(icon);
         if(art && ok[art]) c.icon(ox,oy,map_scale,artwork[art]);
         else fallback_icon(c,ox,oy,icon);
@@ -282,7 +423,7 @@ inline void map(Canvas& c,const std::array<uint32_t,cells>& tiles,const std::arr
         if(ry>=-4 && ry<=3 && std::abs(rx)<=(ry+4)/2) c.put(x+xx,y+yy,hp_color);
     }
     constexpr std::array<const char*,4> directions{"NORTH", "EAST", "SOUTH", "WEST"};
-    c.text(55,513,"Recorded map",10,muted);
+    c.text(55,513,hints && ref && ref->ready?"Recorded map + hints":"Recorded map",10,muted);
     if(direction>=0 && direction<int(directions.size())) c.right(535,513,directions[direction],10,accent);
 }
 } // namespace etrian::glass

@@ -41,8 +41,28 @@ public:
 
     template<class Reader>
     std::string lookup(const Reader& memory,int16_t id) const {
-        if (!ready || id<0) return {};
-        const std::string key="enemyname_"+std::to_string(id);
+        return id<0?std::string{}:lookup_key(memory,"enemyname_"+std::to_string(id));
+    }
+
+    template<class Reader>
+    std::string material(const Reader& memory,uint16_t item) const {
+        // GetUseItemNameId subtracts the material base from the global item ID.
+        if(item<925 || item>=0x63f) return {};
+        return lookup_key(memory,"useitemname_"+std::to_string(item-924));
+    }
+
+    template<class Reader>
+    std::string quest(const Reader& memory,bool mission,unsigned id,bool explain=false) const {
+        if (id>9999) return {};
+        const auto suffix=std::to_string(10000+id).substr(1);
+        return lookup_key(memory,std::string(mission?(explain?"mission_explain.msg":"mission_name"):
+                              (explain?"quest_explain":"quest_name"))+suffix,explain);
+    }
+
+private:
+    template<class Reader>
+    std::string lookup_key(const Reader& memory,std::string_view key,bool paragraph=false) const {
+        if (!ready) return {};
         const uint32_t hash=string_hash(key);
         int32_t index=-1;
         if (!read(memory,buckets,0x20+4*(hash%bucket_count),index)) return {};
@@ -56,7 +76,7 @@ public:
                 if (read_string(memory,label)==key) {
                     uint64_t value=0;
                     if (!read(memory,entries,offset+0x48+8*language,value)) return {};
-                    auto name=read_string(memory,value);
+                    auto name=paragraph?read_string<640>(memory,value,true):read_string(memory,value);
                     int32_t current_version=0;
                     if (name.find_first_not_of(" \xa0")==std::string::npos || name.front()=='<' ||
                         !read(memory,dictionary,0x24,current_version) || current_version!=version) return {};
@@ -70,22 +90,29 @@ public:
         return {};
     }
 
-private:
     template<class Reader,class T>
     static bool read(const Reader& memory,uint64_t object,uint64_t offset,T& value) {
         return object && object<=UINT64_MAX-offset-sizeof(T) && memory(object+offset,&value,sizeof(T));
     }
 
-    template<class Reader>
-    static std::string read_string(const Reader& memory,uint64_t object) {
-        std::array<uint16_t,80> text{};
+    template<size_t Limit=80,class Reader>
+    static std::string read_string(const Reader& memory,uint64_t object,bool paragraph=false) {
+        std::array<uint16_t,Limit> text{};
         int32_t length=0;
         if (!read(memory,object,0x10,length) || length<1 || size_t(length)>text.size() ||
             object>UINT64_MAX-0x14-length*2 || !memory(object+0x14,text.data(),length*2)) return {};
         std::string result;
         result.reserve(length);
         for (int32_t i=0;i<length;++i) {
-            const auto glyph=enemy_name_glyph(text[i]);
+            if (paragraph && text[i]=='<') {
+                int32_t end=i+1;
+                while (end<length && text[end]!='>' && end-i<64) ++end;
+                if (end>=length || text[end]!='>') return {};
+                if (end==i+3 && text[i+1]=='b' && text[i+2]=='r') result+=' ';
+                i=end;
+                continue;
+            }
+            const auto glyph=paragraph && (text[i]=='\n' || text[i]=='\r')?' ':enemy_name_glyph(text[i]);
             if (!glyph) return {};
             result+=char(glyph);
         }

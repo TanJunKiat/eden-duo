@@ -1,4 +1,5 @@
 #include "etrian_battle.h"
+#include "etrian_exploration.h"
 #include <cassert>
 #include <map>
 struct Memory {
@@ -60,6 +61,47 @@ int main() {
     m.put(0x670010,int32_t(5)); named("ENEMY 1"); // no silent language substitution
     m.put(0x670010,int32_t(0)); m.put(0x690094,int32_t(1)); named("ENEMY 1"); // cyclic chain
     m.put(0x690094,int32_t(0)); named("Moon Beetle");
+    // The guide walks standard formations, not gated alternates or zero-weight groups.
+    etrian::FloorReference ref;
+    ref.ready=true;
+    ref.screen[0].chip=1; ref.screen[0].encounter=12;
+    ref.screen[1]=ref.screen[0];
+    uint64_t obj=base;
+    for(uint64_t offset:{0x61a60f0,0x18,0xc0,0,0xb8,0}) {
+        const uint64_t next=obj+0xb00000;
+        ptr(obj+offset,next); obj=next;
+    }
+    ptr(obj+0xa8,0xb80000); ptr(obj+0xb0,0xb90000);
+    ptr(0xb80010,0xba0000); ptr(0xb90010,0xbb0000);
+    m.put(0xba0018,uint64_t(13)); m.put(0xbb0018,uint64_t(2));
+    ptr(0xba0020+12*0x58,0xbc0000); m.put(0xbc0018,uint64_t(3));
+    m.put(0xbc0020,uint16_t(0x20)); m.put(0xbc0040,uint16_t(0x10));
+    ptr(0xbc0048,0xbd0000); m.put(0xbd0018,uint64_t(5));
+    for(int i=0;i<5;++i) m.put(0xbd0020+i*4,std::array<uint16_t,2>{uint16_t(i>0),uint16_t(i?0:100)});
+    ptr(0xbb0028,0xbe0000); m.put(0xbe0018,uint64_t(8));
+    m.put(0xbe0020,std::array<uint8_t,8>{37,37,0,0,0,0,0,0});
+    const auto guide=etrian::read_floor_monsters(m,base,ref);
+    assert(guide.size()==1 && guide.front().id==37 && guide.front().name=="Moon Beetle");
+    m.put(0xbd0022,uint16_t(99)); assert(etrian::read_floor_monsters(m,base,ref).empty());
+    ptr(obj+0x20,0xbf0000); ptr(0xbf0010,0xc20000); m.put(0xc20018,uint64_t(38));
+    ptr(0xc20078+37*0x68,0xc10000); m.put(0xc10018,uint64_t(3));
+    for(unsigned i=0;i<3;++i) m.put(0xc10020+6*i,std::array<uint16_t,3>{0,0,0});
+    const auto empty_drops=etrian::read_monster_drops(m,base,37);
+    assert(empty_drops && empty_drops->empty());
+    const std::string item_key="useitemname_1";
+    std::array<uint32_t,2> hash{5381,5381};
+    for(size_t i=0;i<item_key.size();++i) hash[i%2]=(hash[i%2]*33)^uint8_t(item_key[i]);
+    const uint32_t key_hash=(hash[0]+hash[1]*0x5d588b65u)&0x7fffffffu;
+    m.put(0x680020+4*(key_hash%5),int32_t(0));
+    m.put(0x690020,key_hash); put_string(0x710000,u"useitemname_1");
+    put_string(0x720000,u"Test Scale");
+    m.put(0xc10020,std::array<uint16_t,3>{925,42,0});
+    m.put(0xc10026,std::array<uint16_t,3>{925,90,0x200});
+    const auto drops=etrian::read_monster_drops(m,base,37);
+    assert(drops && drops->size()==2 && (*drops)[0].name=="Test Scale" && (*drops)[0].base_chance==42);
+    assert(!(*drops)[0].conditional && (*drops)[1].conditional && !(*drops)[1].base_chance);
+    m.put(0xc10022,uint16_t(101)); assert(!etrian::read_monster_drops(m,base,37));
+    m.put(0xc10018,uint64_t(4)); assert(!etrian::read_monster_drops(m,base,37));
     m.put(0x390018,int32_t(99)); assert(etrian::read_battle(m,base,b)==etrian::BattleMode::loading && b.allies.empty());
 
     // The live town array is distinct from the battle roster and guild storage.
