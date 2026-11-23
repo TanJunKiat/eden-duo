@@ -1,13 +1,13 @@
 {
   "format": 1,
   "title_id": "010084A0176AA000",
-  "name": "Etrian Odyssey III HD experimental map",
+  "name": "Etrian Odyssey III HD — Abyss Glass",
   "min_runtime": 19,
   "requires_module": true,
   "poll_hz": 10,
   "canvas_w": 592,
   "canvas_h": 528,
-  "background": "#FF082744",
+  "background": "#FF090F21",
   "module_outputs": ["map.ready", "map.key", "map.floor"],
   "pages": [
     {

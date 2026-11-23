@@ -16,7 +16,7 @@ This is a practical handoff for continuing the three **experimental, read-only**
 |---|---|---|---|---|
 | I | `etrian-odyssey-hd` | `01008970176A6000` | `4CBA9B7CE88603D196F4C63639586B8F00000000000000000000000000000000` | 0.7.2 |
 | II | `etrian-odyssey-ii-hd` | `0100B810176A8000` | `8883310FF46D85D17C09882B36A8205D00000000000000000000000000000000` | 0.1.0 |
-| III | `etrian-odyssey-iii-hd` | `010084A0176AA000` | `3D0322EDA242DEC85321974C126F43AC00000000000000000000000000000000` | 0.1.1 |
+| III | `etrian-odyssey-iii-hd` | `010084A0176AA000` | `3D0322EDA242DEC85321974C126F43AC00000000000000000000000000000000` | 0.1.4 |
 
 All packages require runtime 19 and contain an Android ARM64 module only. Each title directory has a `<title-id>.cpp` ABI entry point and renderer; `etrian_map.h` map helpers; `etrian_battle.h` battle reader; `etrian_art.h` runtime artwork loader; a `dualscreen/manifest.json`; four corresponding `*_test.cpp` synthetic tests; a README; and an installable `<title-id>.dsmod.zip`. The code was copied into title-specific directories: changes in one do **not** automatically update the others. Shared DSMod ABI definitions are in `src/core/mods/dsmod_module_abi.h` and `dsmod_module_extensions.h`.
 
@@ -26,7 +26,7 @@ Important commits: `67d2982f2e` first-game battle layout; `0766954a8f` II/III po
 
 The module's `supports` checks the exact build ID. `sample()` reads the scene and battle state first; battle or loading produces a battle image in place of the map. In map mode it validates pointers, floor, coordinates, direction and array lengths before publishing `map.ready` and a generation-keyed `module:etrian:map/<generation>` image. The image callback draws a fixed RGBA map or the battle cards. Mutex-protected state and generation changes avoid serving the wrong image. Inspect the per-title code for exact bounds and behavior; do not assume unknown scene behavior is identical between titles.
 
-Battle cards put enemies above allies, in centered rows of at most three and up to eight per side. Each occupied slot is kept in roster order (not proven visual formation order). Incomplete reads display unavailable; supported player TP is shown when readable. Non-ASCII names are currently replaced by `?`. I and II classify scene kind `2` as battle and other readable values as map; III recognizes dungeon `4` and battle `5`, and treats other/unreadable scenes as unavailable rather than showing a stale dungeon map. I/II's `unknown` fallback depends on the prior mode; verify transitions before changing it.
+Battle cards put enemies above allies, in centered rows of at most three and up to eight per side. Each occupied slot is kept in roster order (not proven visual formation order). Incomplete reads display unavailable; supported player TP is shown when readable. Non-ASCII names are currently replaced by `?`. I and II classify scene kind `2` as battle and other readable values as map; III recognizes Armoroad `3`, dungeon `4` and battle `5`, and treats other/unreadable scenes as unavailable rather than showing a stale dungeon map. I/II's `unknown` fallback depends on the prior mode; verify transitions before changing it.
 
 ### Recorded map layout
 
@@ -52,7 +52,7 @@ The battle singleton helper follows `main + type-info slot → +0x58 → +0xb8 �
 | II | `0x55c07f0 / +0x1c` | `0x55bcef0` | manager `+0x88` → controller `+0x38` side arrays; character name `+0x28`, parameter `+0x58`, values `+0x10` |
 | III | `0x618e708 / +0x44` | `0x618ace8` | manager `+0xb8` → packet `+0x88` party array → party `+0x18` units → unit `+0x340` character data; data `+0x50/+0x52` are current HP/TP (`int16`), `+0x48` ability data (max HP/TP at `+0x10/+0x14`), name `+0x58` |
 
-The code interprets side 0 as allies, side 1 as enemies. II's controller offset is **not** I's. III is a different battle engine; its observed enemy name was empty, so empty enemy names become `ENEMY <slot>` and an empty ally name makes battle data unavailable. Do not assume empty means the game has no name.
+The code interprets side 0 as allies, side 1 as enemies. II's controller offset is **not** I's. III is a different battle engine. The per-character name field is usually empty for enemies; use the active text table as described below. An empty ally name still makes battle data unavailable.
 
 Observed, not exhaustively proven:
 
@@ -60,6 +60,18 @@ Observed, not exhaustively proven:
 - **II:** in one isolated dungeon/battle the position/floor matched the screen, a displayed ally had 45 HP / 20 TP, and two enemy records were found. No II effect duration is claimed.
 - **III:** in one isolated dungeon/battle the position/floor matched the screen, a displayed ally had 44 HP / 18 TP, and two enemy records were found. Maxima, enemy HP after damage and general effect semantics remain insufficiently validated.
 - The user reported the original fixed map floors/walls working and later reported the III artwork fix works; the latter report did not specify the device or validate every icon. Do not generalize these observations into comprehensive device/formation/transition coverage.
+
+### EO III Armoroad party (0.1.2)
+
+On update v0.3.0, `GameData.GetPartyData` and the in-game order lookup lead to the active array via `main+0x639a810 → +0 → +0xb8 → +0 → +0x10 → +0x20 → +0x28`. The companion bounds the array at five, skips null slots, and orders members using the byte at `+0x7a`. It reads the same current HP/TP and name offsets as the battle character object, but not the battle ability maxima: those fields were zero in town. The registered roster at `PARTY_DATA+0x20` is not used. A fresh process and an isolated guild formation change confirmed the active roster, duplicate names, and two members' displayed order and HP/TP. `SEA` (`6`) and `TOWN2` (`7`) remain unsupported; enum identities come from the patched update metadata, not live checks of those two scenes.
+
+### EO III Abyss Glass (0.1.3)
+
+`etrian_render.h` draws all three panels at 592×528. The ABI entry point still samples the same scene and roster data and publishes generation-keyed images. Battle cards show a centered lineup in reader order; do not infer front/back positions from it. Roomy cards reserve space for verified skill names, but all layouts currently report effects unavailable. `generate_font_atlas.py <Manrope.ttf>` uses Pillow to regenerate the offline glyph atlas; the Android module does not depend on Pillow or a runtime font loader. The input font source and hash are documented at the top of the script.
+
+### EO III localized enemy names (0.1.4)
+
+`BattleManager.SetEnemyNameMessage` uses the enemy's `BATTLEUNITWORK.ms16UnitNo` at `+0x26`. The companion formats the same `enemyname_<id>` key and reads `TextLabelDataManager` through the `get_Instance` method slot at `main+0x61a6208`. `etrian_enemy_names.h` reads its active language and performs a bounded dictionary lookup against the exact key. It does not call guest code or package a text table. Unknown languages and absent or malformed names fall back to the unit name, then `ENEMY <slot>`. The renderer accepts Windows-1252 enemy names; battle card order is a separate concern.
 
 ## Runtime artwork
 
@@ -97,7 +109,7 @@ Requires Android NDK r28c and the [Eden Duo Companions](https://github.com/igawa
 D=companions/etrian-odyssey-iii-hd
 T=010084A0176AA000
 BUILD=3D0322EDA242DEC85321974C126F43AC00000000000000000000000000000000
-VERSION=0.1.1
+VERSION=0.1.4
 "$NDK_HOST/bin/aarch64-linux-android24-clang++" -std=c++20 -O2 -shared -fPIC -static-libstdc++ \
   -I src "$D/$T.cpp" -o "/tmp/$T.so"
 "$NDK_HOST/bin/llvm-strip" --strip-all "/tmp/$T.so"
@@ -109,7 +121,7 @@ unzip -l "/tmp/etrian-dist/$T.dsmod.zip"
 # After inspection, copy the ZIP to the title directory if it is intended for distribution.
 ```
 
-Inspect `package.json` and `dualscreen/manifest.json` in the ZIP for title, version, runtime, correct full build ID and `android-arm64-v8a` module. The expected archive contains manifest, module and package metadata only—not proprietary data. Install via Eden Duo's game **Add-ons → Install → Dual screen mods**. A valid ZIP and a successful cross-compile do not replace on-device testing.
+Inspect `package.json` and `dualscreen/manifest.json` in the ZIP for title, version, runtime, correct full build ID and `android-arm64-v8a` module. The expected archive contains manifest, module and package metadata; III also includes its Manrope font license. Do not include proprietary data. Install via Eden Duo's game **Add-ons → Install → Dual screen mods**. A valid ZIP and a successful cross-compile do not replace on-device testing.
 
 ## Continuing research safely
 
@@ -124,7 +136,7 @@ Earlier research used temporary files under `/tmp/eden-etrian-research`, `/tmp/e
 ## Priority follow-ups
 
 - Verify II/III floor flags and individual icon semantics, floor changes, reloads and scene transitions; test full parties, gaps, bosses and summons.
-- Verify battle HP/TP and maxima, especially non-lethal enemy damage; resolve III enemy display names from the running game without packaging text.
+- Verify battle HP/TP and maxima, especially non-lethal enemy damage; validate III enemy names across more encounters, bosses, and languages.
 - Extend active effects only after title-specific observation; research I's runtime localized skill lookup described in the linked skill-research note. Never carry I's War Cry assumptions into II/III.
 - Check non-ASCII names and language selection; validate actual card formation order rather than sorting by guesswork.
 - Device-test Android install, update/build gating, startup, rotation, map/battle switching, memory/performance and fallback behavior. III's sea map, map editing, memo text and live FOE tracking are not implemented.
