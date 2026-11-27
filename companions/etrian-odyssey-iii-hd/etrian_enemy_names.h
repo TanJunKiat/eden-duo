@@ -45,6 +45,11 @@ public:
     }
 
     template<class Reader>
+    std::string player_skill(const Reader& memory,uint16_t skill) const {
+        return lookup_key(memory,"playerskillname_"+std::to_string(skill));
+    }
+
+    template<class Reader>
     std::string material(const Reader& memory,uint16_t item) const {
         // GetUseItemNameId subtracts the material base from the global item ID.
         if(item<925 || item>=0x63f) return {};
