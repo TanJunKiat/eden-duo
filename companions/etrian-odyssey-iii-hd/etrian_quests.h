@@ -12,7 +12,7 @@ struct QuestKey {
     uint16_t index;
     bool operator==(const QuestKey&) const = default;
 };
-enum class QuestStatus { active, report };
+enum class QuestStatus { active, report, available };
 struct QuestItem {
     uint16_t id=0;
     uint8_t required=0;
@@ -116,6 +116,15 @@ struct QuestJournal {
     bool operator==(const QuestJournal&) const = default;
 };
 inline constexpr int quest_page_size=5;
+enum class TownQuestTab { available, accepted, report };
+using TownQuestList = std::optional<std::vector<QuestEntry>>;
+struct TownQuestBoard {
+    TownQuestList available,accepted,report;
+    bool operator==(const TownQuestBoard&) const = default;
+};
+inline const TownQuestList& town_quest_list(const TownQuestBoard& board,TownQuestTab tab) {
+    return tab==TownQuestTab::available?board.available:tab==TownQuestTab::accepted?board.accepted:board.report;
+}
 
 namespace quest_data {
 template<class Reader,class T>
@@ -141,9 +150,11 @@ std::optional<std::array<int16_t,60>> bag(const Reader& memory,uint64_t save) {
 }
 
 template<class Reader>
-QuestJournal read_quest_journal(const Reader& memory,uint64_t base,int floor) {
+QuestJournal read_quest_journal(const Reader& memory,uint64_t base,int floor,bool reports_only=false,
+                                uint64_t expected_save=0) {
     using namespace quest_data;
     const auto save=follow(memory,base,{0x639a810,0,0xb8,0,0x10});
+    if(!save || (expected_save && expected_save!=save)) return {};
     const auto flag_array=follow(memory,save,{0x48});
     const auto master=follow(memory,base,{0x61a60f0,0x18,0xc0,0,0xb8,0});
     uint64_t size=0;
@@ -167,12 +178,13 @@ QuestJournal read_quest_journal(const Reader& memory,uint64_t base,int floor) {
             const auto accepted=row[3],report=row[4],complete=row[5];
             if(accepted/8>=flags.size() || report/8>=flags.size() || complete/8>=flags.size() ||
                accepted==report || report==complete || accepted==complete) return {};
-            if(set(complete) || (!set(report) && !set(accepted))) continue;
+            const bool ready=set(report);
+            if(set(complete) || (!ready && (reports_only || !set(accepted)))) continue;
             auto name=labels.quest(memory,mission,i);
             if(name.empty()) name=std::string(mission?"Mission ":"Quest ")+std::to_string(i+1);
-            QuestEntry entry{{mission,i},set(report)?QuestStatus::report:QuestStatus::active,
-                             std::move(name),labels.quest(memory,mission,i,true),{}};
-            for(const auto [item,required]:quest_hint(entry.key).items) {
+            QuestEntry entry{{mission,i},ready?QuestStatus::report:QuestStatus::active,
+                             std::move(name),reports_only?std::string{}:labels.quest(memory,mission,i,true),{}};
+            if(!reports_only) for(const auto [item,required]:quest_hint(entry.key).items) {
                 if(!item) continue;
                 if(!checked_inventory) { inventory=bag(memory,save); checked_inventory=true; }
                 auto label=labels.material(memory,item);
@@ -193,5 +205,85 @@ QuestJournal read_quest_journal(const Reader& memory,uint64_t base,int floor) {
         return rank(a)<rank(b);
     });
     return journal;
+}
+
+template<class Reader>
+TownQuestBoard read_town_quest_board(const Reader& memory,uint64_t base,uint64_t save) {
+    using namespace quest_data;
+    const auto flags=follow(memory,save,{0x48});
+    const auto master=follow(memory,base,{0x61a60f0,0x18,0xc0,0,0xb8,0});
+    uint64_t count=0;
+    std::array<uint8_t,2048> bitmap{};
+    if(!read(memory,flags,0x18,count) || count!=bitmap.size()) return {};
+    const bool whole=read(memory,flags,0x20,bitmap);
+    const auto flag=[&](uint16_t id)->std::optional<bool> {
+        const size_t index=id/8;
+        if(index>=bitmap.size()) return {}; // local flags are not in this save bitmap
+        uint8_t value=0;
+        if(whole) value=bitmap[index];
+        else if(!read(memory,flags,0x20+index,value)) return {};
+        return (value & (1u<<(id%8)))!=0;
+    };
+    TownQuestBoard board;
+    board.available.emplace(); board.accepted.emplace(); board.report.emplace();
+    const EnemyLabels labels(memory,base);
+    for(const bool mission:{true,false}) {
+        const auto records=follow(memory,master,{mission?0xc8u:0xc0u,0x10});
+        const uint16_t rows=mission?13:52;
+        std::array<uint16_t,8> row{};
+        if(!read(memory,records,0x18,count) || count!=rows) {
+            board.accepted.reset(); board.report.reset();
+            if(!mission) board.available.reset();
+            continue;
+        }
+        for(uint16_t i=0;i<rows;++i) {
+            if(!read(memory,records,0x20+i*sizeof(row),row) ||
+               row[3]==row[4] || row[3]==row[5] || row[4]==row[5]) {
+                board.accepted.reset(); board.report.reset();
+                if(!mission) board.available.reset();
+                break;
+            }
+            const auto complete=flag(row[5]);
+            if(complete && *complete) continue;
+            const auto ready=flag(row[4]);
+            // A ready flag takes precedence over acceptance, even if the accepted bit is missing.
+            const auto accepted=ready && *ready?std::optional<bool>{false}:flag(row[3]);
+            if(!complete || !ready) {
+                board.report.reset(); board.accepted.reset();
+                if(!mission) board.available.reset();
+                continue;
+            }
+            TownQuestList* list=nullptr;
+            QuestStatus status=QuestStatus::active;
+            if(*ready) { list=&board.report; status=QuestStatus::report; }
+            else if(!accepted) {
+                board.accepted.reset();
+                if(!mission) board.available.reset();
+                continue;
+            } else if(*accepted) list=&board.accepted;
+            else if(!mission && board.available) {
+                // The receive list filters positive row[6] values by town (Armoroad=1).
+                const auto venue=static_cast<int16_t>(row[6]);
+                if(venue>0 && venue!=1) continue;
+                // CreateReceiveQuestList selects NONE + QuestMissionCheckListUp. For NONE,
+                // the latter requires every nonnegative list-up flag in the first three words.
+                bool locked=false,unknown=false;
+                for(size_t gate=0;gate<3;++gate) {
+                    if(row[gate]>=0x8000u) continue; // native signed sentinel
+                    const auto posted=flag(row[gate]);
+                    if(!posted) unknown=true;
+                    else if(!*posted) { locked=true; break; }
+                }
+                if(locked) continue;
+                if(unknown) { board.available.reset(); continue; }
+                list=&board.available; status=QuestStatus::available;
+            }
+            if(!list || !*list) continue;
+            auto name=labels.quest(memory,mission,i);
+            if(name.empty()) name=std::string(mission?"Mission ":"Quest ")+std::to_string(i+1);
+            (*list)->push_back({{mission,i},status,std::move(name),{}, {}});
+        }
+    }
+    return follow(memory,save,{0x48})==flags?std::move(board):TownQuestBoard{};
 }
 } // namespace etrian

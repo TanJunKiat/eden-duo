@@ -1,6 +1,8 @@
+#undef NDEBUG
+#include <cassert>
 #include "etrian_battle.h"
 #include "etrian_exploration.h"
-#include <cassert>
+#include "etrian_native_editor.h"
 #include <map>
 struct Memory {
     std::map<uint64_t,uint8_t> bytes;
@@ -19,6 +21,27 @@ int main() {
     ptr(base+0x618e708,0x200000); ptr(0x200058,0x210000); ptr(0x2100b8,0x220000); ptr(0x220000,0x230000);
     etrian::BattleSnapshot b;
     m.put(0x230044,int32_t(4)); assert(etrian::read_battle(m,base,b)==etrian::BattleMode::map);
+    ptr(base+0x61a60b8,0xe00000); ptr(base+0x61a60e0,0xe10000);
+    for(uint64_t node:{0xe00000,0xe10000}) {
+        ptr(node+0x18,node+0x1000); ptr(node+0x10c0,node+0x2000);
+        ptr(node+0x2000,node+0x3000); ptr(node+0x30b8,node+0x4000);
+        ptr(node+0x4000,node+0x5000);
+    }
+    ptr(0xe15178,0xe05000); ptr(0xe15088,0xe20000);
+    m.put(0xe050dc,int32_t(1)); m.put(0xe050d1,uint8_t(0)); m.put(0xe200ad,uint8_t(0));
+    ptr(base+0x618d6a8,0xe30000); ptr(0xe300b8,0xe31000); ptr(0xe31000,0xe32000);
+    ptr(0xe32018,0xe33000); ptr(0xe32028,0xe34000);
+    ptr(base+0x618ae60,0xe40000); ptr(0xe400b8,0xe41000); ptr(0xe41000,0xe42000);
+    ptr(0xe42018,0xe43000);
+    for(uint64_t field:{0xe33088,0xe34030,0xe43028}) m.put(field,uint8_t(0));
+    assert(etrian::read_native_editor(m,base));
+    for(uint64_t field:{0xe050d1,0xe200ad,0xe33088,0xe34030,0xe43028}) {
+        m.put(field,uint8_t(1)); assert(!etrian::read_native_editor(m,base));
+        m.put(field,uint8_t(0));
+    }
+    m.put(0x230044,int32_t(5)); assert(!etrian::read_native_editor(m,base));
+    m.put(0x230044,int32_t(4)); m.bytes.erase(0xe15178);
+    assert(!etrian::read_native_editor(m,base));
     m.put(0x230044,int32_t(6)); assert(etrian::read_battle(m,base,b)==etrian::BattleMode::unknown);
     m.put(0x230044,int32_t(5)); assert(etrian::read_battle(m,base,b)==etrian::BattleMode::loading);
     ptr(base+0x618ace8,0x300000); ptr(0x300058,0x310000); ptr(0x3100b8,0x320000); ptr(0x320000,0x330000);
@@ -32,10 +55,36 @@ int main() {
         m.put(name+0x10,int32_t(u==0x400000?4:0));
         if(u==0x400000) { m.put(name+0x14,uint16_t('E'));m.put(name+0x16,uint16_t('d'));m.put(name+0x18,uint16_t('e'));m.put(name+0x1a,uint16_t('n')); }
     }
+    const auto flags=[&](uint64_t unit,uint64_t storage) {
+        ptr(unit+0x18,storage); m.put(storage+0x18,uint64_t(1)); m.put(storage+0x20,uint32_t(1));
+        ptr(unit+0x10,storage+0x40); m.put(storage+0x58,uint64_t(1)); m.put(storage+0x60,uint32_t(0));
+    };
+    flags(0x410000,0x4d0000);
+    m.put(0x411060,uint16_t(0));
     assert(etrian::read_battle(m,base,b)==etrian::BattleMode::battle);
     assert(b.allies.size()==1 && b.enemies.size()==1);
     assert(b.allies[0].name=="Eden" && b.allies[0].hp==44 && b.allies[0].tp==18);
     assert(b.enemies[0].name=="ENEMY 1" && b.enemies[0].war_cry==-1);
+    // A dead enemy can remain in its native array slot with readable nonzero HP.
+    m.put(0x390018,int32_t(2)); ptr(0x390028,0x450000);
+    ptr(0x450340,0x451000); ptr(0x451048,0x452000); m.put(0x451050,int16_t(7));
+    m.put(0x452010,int32_t(30)); m.put(0x451060,uint16_t(0));
+    flags(0x450000,0x4e0000);
+    m.put(0x3300b4,int32_t(5));
+    assert(etrian::read_battle(m,base,b)==etrian::BattleMode::battle && b.enemies.size()==2);
+    m.put(0x411060,uint16_t(1)); // Native BadStatusFg KO; the slot and HP remain readable.
+    m.put(0x401050,int16_t(0)); // Allies with KO must remain visible.
+    assert(etrian::read_battle(m,base,b)==etrian::BattleMode::battle && b.enemies.size()==1);
+    assert(b.enemies[0].name=="ENEMY 2" && b.allies.size()==1 && b.allies[0].hp==0);
+    m.put(0x4e0060,uint32_t(0x02000000)); // Native immediate-death flag, before the KO status lands.
+    assert(etrian::read_battle(m,base,b)==etrian::BattleMode::battle && b.enemies.empty() && b.allies.size()==1);
+    m.put(0x4e0020,uint32_t(0)); // Once removed, an occupied slot needn't have readable stats/flags.
+    m.bytes.erase(0x4e0060); m.bytes.erase(0x451050);
+    assert(etrian::read_battle(m,base,b)==etrian::BattleMode::battle && b.enemies.empty());
+    m.put(0x4e0020,uint32_t(1));
+    assert(etrian::read_battle(m,base,b)==etrian::BattleMode::loading && b.enemies.empty());
+    m.put(0x390018,int32_t(1));
+    m.put(0x411060,uint16_t(0)); m.put(0x401050,int16_t(44));
     auto put_string=[&](uint64_t a,std::u16string_view s) {
         m.put(a+0x10,int32_t(s.size()));
         for(size_t i=0;i<s.size();++i) m.put(a+0x14+i*2,uint16_t(s[i]));
@@ -81,8 +130,14 @@ int main() {
     ptr(0xbb0028,0xbe0000); m.put(0xbe0018,uint64_t(8));
     m.put(0xbe0020,std::array<uint8_t,8>{37,37,0,0,0,0,0,0});
     const auto guide=etrian::read_floor_monsters(m,base,ref);
-    assert(guide.size()==1 && guide.front().id==37 && guide.front().name=="Moon Beetle");
-    m.put(0xbd0022,uint16_t(99)); assert(etrian::read_floor_monsters(m,base,ref).empty());
+    assert(guide && guide->size()==1 && guide->front().id==37 && guide->front().name=="Moon Beetle");
+    m.put(0xbd0022,uint16_t(95)); // installed B8F/B24F tables do not always total 100
+    const auto underfilled=etrian::read_floor_monsters(m,base,ref);
+    assert(underfilled && underfilled->size()==1 && underfilled->front().id==37);
+    m.put(0xbd0022,uint16_t(101)); assert(!etrian::read_floor_monsters(m,base,ref));
+    ref.screen={};
+    const auto empty_guide=etrian::read_floor_monsters(m,base,ref);
+    assert(empty_guide && empty_guide->empty());
     ptr(obj+0x20,0xbf0000); ptr(0xbf0010,0xc20000); m.put(0xc20018,uint64_t(38));
     ptr(0xc20078+37*0x68,0xc10000); m.put(0xc10018,uint64_t(3));
     for(unsigned i=0;i<3;++i) m.put(0xc10020+6*i,std::array<uint16_t,3>{0,0,0});
@@ -102,6 +157,47 @@ int main() {
     assert(!(*drops)[0].conditional && (*drops)[1].conditional && !(*drops)[1].base_chance);
     m.put(0xc10022,uint16_t(101)); assert(!etrian::read_monster_drops(m,base,37));
     m.put(0xc10018,uint64_t(4)); assert(!etrian::read_monster_drops(m,base,37));
+    const std::string skill_key="playerskillname_21";
+    hash={5381,5381};
+    for(size_t i=0;i<skill_key.size();++i) hash[i%2]=(hash[i%2]*33)^uint8_t(skill_key[i]);
+    const uint32_t skill_hash=(hash[0]+hash[1]*0x5d588b65u)&0x7fffffffu;
+    m.put(0x680020+4*(skill_hash%5),int32_t(0));
+    m.put(0x690020,skill_hash); put_string(0x710000,u"playerskillname_21");
+    put_string(0x720000,u"Guard Order");
+    ptr(0x4002d8,0xc30000); m.put(0xc30018,uint64_t(3));
+    for(unsigned i=0;i<3;++i) {
+        const auto slot=0xc31000+0x40*i;
+        ptr(0xc30020+8*i,slot); m.put(slot+0x10,std::array<uint8_t,8>{});
+    }
+    const auto guard=[&](int phase,uint8_t turns,uint8_t category,uint8_t origin,uint8_t skill) {
+        m.put(0x3300b4,int32_t(phase));
+        m.put(0xc31010,std::array<uint8_t,8>{turns,category,origin,0,0,0,skill,0});
+        assert(etrian::read_battle(m,base,b)==etrian::BattleMode::battle);
+        assert(!b.enemies[0].guard_order);
+        return b.allies[0].guard_order;
+    };
+    for(uint8_t turns:{3,2,5,4,1}) {
+        const auto timer=guard(5,turns,1,0,21);
+        assert(timer && timer->name=="Guard Order" && timer->turns==turns);
+    }
+    for(int phase:{15,14,15,5}) { // open Skill, select target, cancel target, close Skill
+        const auto timer=guard(phase,3,1,0,21);
+        assert(timer && timer->name=="Guard Order" && timer->turns==3);
+    }
+    assert(!guard(7,4,1,0,21)); // animation-only value
+    assert(!guard(8,4,1,0,21) && !guard(99,4,1,0,21));
+    assert(!guard(15,0,0,0,21)); // opening Skill must not resurrect an expired buff
+    guard(15,3,1,0,21);
+    const auto phase_changes_during_read=[&](uint64_t address,void* dst,size_t size) {
+        const bool ok=m(address,dst,size);
+        if(address==0xc31010) m.put(0x3300b4,int32_t(7));
+        return ok;
+    };
+    assert(etrian::read_battle(phase_changes_during_read,base,b)==etrian::BattleMode::battle);
+    assert(!b.allies[0].guard_order);
+    assert(!guard(5,0,0,0,21)); // removed on expiry
+    assert(!guard(5,3,1,1,21) && !guard(5,3,1,0,22));
+    m.bytes.erase(0xc31050); assert(!guard(5,3,1,0,21)); // incomplete slot array
     m.put(0x390018,int32_t(99)); assert(etrian::read_battle(m,base,b)==etrian::BattleMode::loading && b.allies.empty());
 
     // The live town array is distinct from the battle roster and guild storage.
